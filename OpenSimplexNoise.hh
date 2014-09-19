@@ -1,0 +1,717 @@
+/*
+ * OpenSimplex (Simplectic) Noise in C++
+ * Copyright 2014 Arthur Tombs
+ *
+ * This is a derivative work based on OpenSimplex by Kurt Spencer.
+ * The original copyright notice follows below.
+ */
+
+/*
+ * OpenSimplex (Simplectic) Noise in Java
+ * Copyright 2014 Kurt Spencer
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * (v0.0.1 with new gradient set and corresponding normalization factor, 9/19/14)
+ */
+
+#ifndef OPENSIMPLEXNOISE_HH
+#define OPENSIMPLEXNOISE_HH
+
+#include <cstdlib>
+#include <cmath>
+
+// TODO: Use a vector class and some template magic to extend this to
+//       higher dimensions.
+class OpenSimplexNoise {
+
+private:
+
+  static const double STRETCH_CONSTANT_3D = -1.0 / 6.0;
+  static const double SQUISH_CONSTANT_3D  =  1.0 / 3.0;
+
+  // Normalization constant tested using over 4 billion evaluations to bound
+  // range within [-1,1]. This is a safe upper-bound. Actual min/max values
+  // found over the course of the 4 billion evaluations were
+  // -28.12974224468639 (min) and 28.134269887817773 (max).
+  static const double NORM_CONSTANT = 28.25;
+
+  // Array of gradient values for 3D. Values are defined below the class definition.
+  static const short gradients3D [72];
+
+  // The default permutation order. Values are defined below the class definition.
+  static const unsigned short permDefault [256];
+
+  const unsigned short * perm;
+  const unsigned short * permGradIndex3D;
+
+  double extrapolate (long xsb, long ysb, long zsb, double dx, double dy, double dz) const {
+    short index = permGradIndex3D[(perm[(perm[xsb & 0xFF] + ysb) & 0xFF] + zsb) & 0xFF];
+    return gradients3D[index] * dx +
+           gradients3D[index + 1] * dy +
+           gradients3D[index + 2] * dz;
+  }
+
+public:
+
+  OpenSimplexNoise (const unsigned short * p = permDefault) : perm(p) {
+    unsigned short * pgi = new unsigned short [256];
+    for (short i = 0; i < 256; i++) {
+      // NB: 72 is the number of elements in the gradients3D array
+      pgi[i] = (unsigned short)((perm[i] % (72 / 3)) * 3);
+    }
+    permGradIndex3D = pgi;
+  }
+
+  // Initializes the class using a permutation array generated from a
+  // 64-bit seed.
+  // Generates a proper permutation (i.e. doesn't merely perform N
+  // successive pair swaps on a base array)
+  OpenSimplexNoise (unsigned int seed) {
+    unsigned short * p = new unsigned short [256];
+    unsigned short * pgi = new unsigned short [256];
+    unsigned short source [256];
+    for (unsigned short i = 0; i<256; i++) {
+      source[i] = i;
+    }
+    // TODO: Random number generator (C++11 only)
+    srand(seed);
+    for (int i = 255; i >= 0; i--) {
+      int r = (rand() % (i+1));
+      p[i] = source[r];
+      // NB: 72 is the number of elements in the gradients3D array
+      pgi[i] = (short)((p[i] % (72 / 3)) * 3);
+      source[r] = source[i];
+    }
+    perm = p;
+    permGradIndex3D = pgi;
+  }
+
+  ~OpenSimplexNoise (void) {
+    if (perm != permDefault) delete [] perm;
+  }
+
+  double eval (double x, double y, double z) const {
+
+    // Place input coordinates on simplectic lattice.
+    double stretchOffset = (x + y + z) * STRETCH_CONSTANT_3D;
+    double xs = x + stretchOffset;
+    double ys = y + stretchOffset;
+    double zs = z + stretchOffset;
+
+    // Floor to get simplectic lattice coordinates of rhombohedron
+    // (stretched cube) super-cell.
+    long xsb = (long)std::floor(xs);
+    long ysb = (long)std::floor(ys);
+    long zsb = (long)std::floor(zs);
+
+    // Skew out to get actual coordinates of rhombohedron origin.
+    // These will be needed later.
+    double squishOffset = (xsb + ysb + zsb) * SQUISH_CONSTANT_3D;
+    double xb = (double)xsb + squishOffset;
+    double yb = (double)ysb + squishOffset;
+    double zb = (double)zsb + squishOffset;
+
+    // Compute simplectic lattice coordinates relative to rhombohedral
+    // origin.
+    double xins = xs - (double)xsb;
+    double yins = ys - (double)ysb;
+    double zins = zs - (double)zsb;
+
+    // Sum those together to get a value that determines which cell we
+    // are in.
+    double inSum = xins + yins + zins;
+
+    // Positions relative to origin point.
+    double dx0 = x - xb;
+    double dy0 = y - yb;
+    double dz0 = z - zb;
+
+    // These will be given values inside the next block, and used
+    // afterwards.
+    double dx_ext0, dy_ext0, dz_ext0;
+    double dx_ext1, dy_ext1, dz_ext1;
+    long xsv_ext0, ysv_ext0, zsv_ext0;
+    long xsv_ext1, ysv_ext1, zsv_ext1;
+
+    double value = 0.0;
+
+    if (inSum <= 1.0) {
+      // We are inside the tetrahedron (3-Simplex) at (0,0,0)
+
+      // Determine which of (0,0,1), (0,1,0), (1,0,0) are closest.
+      unsigned short aPoint = 1;
+      double aScore = xins;
+      unsigned short bPoint = 2;
+      double bScore = yins;
+      if (aScore >= bScore && zins > bScore) {
+        bScore = zins;
+        bPoint = 4;
+      } else if (aScore < bScore && zins > aScore) {
+        aScore = zins;
+        aPoint = 4;
+      }
+
+      // Now determine the two lattice points not part of the
+      // tetrahedron that may contribute.
+      // This depends on the closest two tetrahedral vertices, including
+      // (0,0,0).
+      double wins = 1.0 - inSum;
+      if (wins > aScore || wins > bScore) {
+        // (0,0,0) is one of the closest two tetrahedral vertices.
+
+        // Our other closest vertex is the closer of a and b.
+        unsigned short c = ((bScore > aScore) ? bPoint : aPoint);
+
+        if (c == 1) {
+          xsv_ext0 = xsv_ext1 = xsb + 1;
+          dx_ext0 = dx_ext1 = dx0 - 1.0;
+        } else {
+          xsv_ext0 = xsb - 1;
+          xsv_ext1 = xsb;
+          dx_ext0 = dx0 + 1.0;
+          dx_ext1 = dx0;
+        }
+
+        if (c == 2) {
+          ysv_ext0 = ysv_ext1 = ysb + 1;
+          dy_ext0 = dy_ext1 = dy0 - 1.0;
+        } else {
+          ysv_ext0 = ysv_ext1 = ysb;
+          dy_ext0 = dy_ext1 = dy0;
+          if (c == 1) {
+            ysv_ext0 -= 1;
+            dy_ext0 += 1.0;
+          } else {
+            ysv_ext1 -= 1;
+            dy_ext1 += 1.0;
+          }
+        }
+
+        if (c == 4) {
+          zsv_ext0 = zsv_ext1 = zsb + 1;
+          dz_ext0 = dz_ext1 = dz0 - 1.0;
+        } else {
+          zsv_ext0 = zsb;
+          zsv_ext1 = zsb - 1;
+          dz_ext0 = dz0;
+          dz_ext1 = dz0 + 1.0;
+        }
+      } else {
+        // (0,0,0) is not one of the closest two tetrahedral vertices.
+
+        // The two extra vertices are determined by the closest two.
+        unsigned short c = (aPoint | bPoint);
+
+        if ((c & 0x01) == 0) {
+          xsv_ext0 = xsb;
+          xsv_ext1 = xsb - 1;
+          dx_ext0 = dx0 - (SQUISH_CONSTANT_3D * 2.0);
+          dx_ext1 = dx0 + 1.0 - SQUISH_CONSTANT_3D;
+        } else {
+          xsv_ext0 = xsv_ext1 = xsb + 1;
+          dx_ext0 = dx0 - 1.0 - (SQUISH_CONSTANT_3D * 2.0);
+          dx_ext1 = dx0 - 1.0 - SQUISH_CONSTANT_3D;
+        }
+
+        if ((c & 0x02) == 0) {
+          ysv_ext0 = ysb;
+          ysv_ext1 = ysb - 1;
+          dy_ext0 = dy0 - (SQUISH_CONSTANT_3D * 2.0);
+          dy_ext1 = dy0 + 1.0 - SQUISH_CONSTANT_3D;
+        } else {
+          ysv_ext0 = ysv_ext1 = ysb + 1;
+          dy_ext0 = dy0 - 1.0 - (SQUISH_CONSTANT_3D * 2.0);
+          dy_ext1 = dy0 - 1.0 - SQUISH_CONSTANT_3D;
+        }
+
+        if ((c & 0x04) == 0) {
+          zsv_ext0 = zsb;
+          zsv_ext1 = zsb - 1;
+          dz_ext0 = dz0 - (SQUISH_CONSTANT_3D * 2.0);
+          dz_ext1 = dz0 + 1.0 - SQUISH_CONSTANT_3D;
+        } else {
+          zsv_ext0 = zsv_ext1 = zsb + 1;
+          dz_ext0 = dz0 - 1.0 - (SQUISH_CONSTANT_3D * 2.0);
+          dz_ext1 = dz0 - 1.0 - SQUISH_CONSTANT_3D;
+        }
+      }
+
+      // Contribution (0,0,0)
+      double attn0 = 2.0 - ((dx0 * dx0) + (dy0 * dy0) + (dz0 * dz0));
+      if (attn0 > 0.0) {
+        value = std::pow(attn0, 4) * extrapolate(xsb, ysb, zsb, dx0, dy0, dz0);
+      }
+
+      // Contribution (0,0,1)
+      double dx1 = dx0 - 1.0 - SQUISH_CONSTANT_3D;
+      double dy1 = dy0 - SQUISH_CONSTANT_3D;
+      double dz1 = dz0 - SQUISH_CONSTANT_3D;
+      double attn1 = 2.0 - ((dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1));
+      if (attn1 > 0.0) {
+        value += std::pow(attn1, 4) * extrapolate(xsb + 1, ysb, zsb, dx1, dy1, dz1);
+      }
+
+      // Contribution (0,1,0)
+      double dx2 = dx0 - SQUISH_CONSTANT_3D;
+      double dy2 = dy0 - 1.0 - SQUISH_CONSTANT_3D;
+      double dz2 = dz1;
+      double attn2 = 2.0 - ((dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2));
+      if (attn2 > 0.0) {
+        value += std::pow(attn2, 4) * extrapolate(xsb, ysb + 1, zsb, dx2, dy2, dz2);
+      }
+
+      // Contribution (1,0,0)
+      double dx3 = dx2;
+      double dy3 = dy1;
+      double dz3 = dz0 - 1.0 - SQUISH_CONSTANT_3D;
+      double attn3 = 2.0 - ((dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3));
+      if (attn3 > 0.0) {
+        value += std::pow(attn3, 4) * extrapolate(xsb, ysb, zsb + 1, dx3, dy3, dz3);
+      }
+    } else if (inSum >= 2.0) {
+      // We are inside the tetrahedron (3-Simplex) at (1,1,1)
+
+      // Determine which two tetrahedral vertices are the closest
+      // out of (1,1,0), (1,0,1), and (0,1,1), but not (1,1,1).
+      short aPoint = 6;
+      double aScore = xins;
+      short bPoint = 5;
+      double bScore = yins;
+      if (aScore <= bScore && zins < bScore) {
+        bScore = zins;
+        bPoint = 3;
+      } else if (aScore > bScore && zins < aScore) {
+        aScore = zins;
+        aPoint = 3;
+      }
+
+      // Now determine the two lattice points not part of the
+      // tetrahedron that may contribute.
+      // This depends on the closest two tetrahedral vertices, including
+      // (1,1,1).
+      double wins = 3.0 - inSum;
+      if (wins < aScore || wins < bScore) {
+        // (1,1,1) is one of the closest two tetrahedral vertices.
+
+        // The other closest vertex is the closest of a and b.
+        unsigned short c = ((bScore < aScore) ? bPoint : aPoint);
+
+        if ((c & 0x01) != 0) {
+          xsv_ext0 = xsb + 2;
+          xsv_ext1 = xsb + 1;
+          dx_ext0 = dx0 - 2.0 - (SQUISH_CONSTANT_3D * 3);
+          dx_ext1 = dx0 - 1.0 - (SQUISH_CONSTANT_3D * 3);
+        } else {
+          xsv_ext0 = xsv_ext1 = xsb;
+          dx_ext0 = dx_ext1 = dx0 - (SQUISH_CONSTANT_3D * 3);
+        }
+
+        if ((c & 0x02) != 0) {
+          ysv_ext0 = ysv_ext1 = ysb + 1;
+          dy_ext0 = dy_ext1 = dy0 - 1.0 - (SQUISH_CONSTANT_3D * 3);
+          if ((c & 0x01) != 0) {
+            ysv_ext1 += 1;
+            dy_ext1 -= 1.0;
+          } else {
+            ysv_ext0 += 1;
+            dy_ext0 -= 1.0;
+          }
+        } else {
+          ysv_ext0 = ysv_ext1 = ysb;
+          dy_ext0 = dy_ext1 = dy0 - (SQUISH_CONSTANT_3D * 3);
+        }
+
+        if ((c & 0x04) != 0) {
+          zsv_ext0 = zsb + 1;
+          zsv_ext1 = zsb + 2;
+          dz_ext0 = dz0 - 1.0 - (SQUISH_CONSTANT_3D * 3);
+          dz_ext1 = dz0 - 2.0 - (SQUISH_CONSTANT_3D * 3);
+        } else {
+          zsv_ext0 = zsv_ext1 = zsb;
+          dz_ext0 = dz_ext1 = dz0 - (SQUISH_CONSTANT_3D * 3);
+        }
+      } else {
+        // (1,1,1) is not one of the closest two tetrahedral vertices.
+
+        // The two extra vertices are determined by the closest two.
+        unsigned short c = aPoint & bPoint;
+
+        if ((c & 0x01) != 0) {
+          xsv_ext0 = xsb + 1;
+          xsv_ext1 = xsb + 2;
+          dx_ext0 = dx0 - 1.0 - SQUISH_CONSTANT_3D;
+          dx_ext1 = dx0 - 2.0 - (SQUISH_CONSTANT_3D * 2);
+        } else {
+          xsv_ext0 = xsv_ext1 = xsb;
+          dx_ext0 = dx0 - SQUISH_CONSTANT_3D;
+          dx_ext1 = dx0 - (SQUISH_CONSTANT_3D * 2);
+        }
+
+        if ((c & 0x02) != 0) {
+          ysv_ext0 = ysb + 1;
+          ysv_ext1 = ysb + 2;
+          dy_ext0 = dy0 - 1.0 - SQUISH_CONSTANT_3D;
+          dy_ext1 = dy0 - 2.0 - (SQUISH_CONSTANT_3D * 2);
+        } else {
+          ysv_ext0 = ysv_ext1 = ysb;
+          dy_ext0 = dy0 - SQUISH_CONSTANT_3D;
+          dy_ext1 = dy0 - (SQUISH_CONSTANT_3D * 2);
+        }
+
+        if ((c & 0x04) != 0) {
+          zsv_ext0 = zsb + 1;
+          zsv_ext1 = zsb + 2;
+          dz_ext0 = dz0 - 1.0 - SQUISH_CONSTANT_3D;
+          dz_ext1 = dz0 - 2.0 - (SQUISH_CONSTANT_3D * 2);
+        } else {
+          zsv_ext0 = zsv_ext1 = zsb;
+          dz_ext0 = dz0 - SQUISH_CONSTANT_3D;
+          dz_ext1 = dz0 - (SQUISH_CONSTANT_3D * 2);
+        }
+      }
+
+      // Contribution (1,1,0)
+      double dx3 = dx0 - 1.0 - (SQUISH_CONSTANT_3D * 2);
+      double dy3 = dy0 - 1.0 - (SQUISH_CONSTANT_3D * 2);
+      double dz3 = dz0 - (SQUISH_CONSTANT_3D * 2);
+      double attn3 = 2.0 - ((dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3));
+      if (attn3 > 0.0) {
+        value = std::pow(attn3, 4) * extrapolate(xsb + 1, ysb + 1, zsb, dx3, dy3, dz3);
+      }
+
+      // Contribution (1,0,1)
+      double dx2 = dx3;
+      double dy2 = dy0 - (SQUISH_CONSTANT_3D * 2);
+      double dz2 = dz0 - 1 - (SQUISH_CONSTANT_3D * 2);
+      double attn2 = 2.0 - ((dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2));
+      if (attn2 > 0.0) {
+        value += std::pow(attn2, 4) * extrapolate(xsb + 1, ysb, zsb + 1, dx2, dy2, dz2);
+      }
+
+      // Contribution (0,1,1)
+      double dx1 = dx0 - (SQUISH_CONSTANT_3D * 2);
+      double dy1 = dy3;
+      double dz1 = dz2;
+      double attn1 = 2.0 - ((dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1));
+      if (attn1 > 0.0) {
+        value += std::pow(attn1, 4) * extrapolate(xsb, ysb + 1, zsb + 1, dx1, dy1, dz1);
+      }
+
+      // Contribution (1,1,1)
+      dx0 = dx0 - 1 - (SQUISH_CONSTANT_3D * 3);
+      dy0 = dy0 - 1 - (SQUISH_CONSTANT_3D * 3);
+      dz0 = dz0 - 1 - (SQUISH_CONSTANT_3D * 3);
+      double attn0 = 2.0 - ((dx0 * dx0) + (dy0 * dy0) + (dz0 * dz0));
+      if (attn0 > 0.0) {
+        value += std::pow(attn0, 4) * extrapolate(xsb + 1, ysb + 1, zsb + 1, dx0, dy0, dz0);
+      }
+    } else {
+      // We are inside the octahedron (rectified 3-Simplex) inbetween.
+
+      double aScore;
+      unsigned short aPoint;
+      bool aIsFurtherSide;
+      double bScore;
+      unsigned short bPoint;
+      bool bIsFurtherSide;
+
+      // Decide between point (1,0,0) and (0,1,1) as closest.
+      double p1 = xins + yins;
+      if (p1 > 1.0) {
+        aScore = p1 - 1.0;
+        aPoint = 3;
+        aIsFurtherSide = true;
+      } else {
+        aScore = 1.0 - p1;
+        aPoint = 4;
+        aIsFurtherSide = false;
+      }
+
+      // Decide between point (0,1,0) and (1,0,1) as closest.
+      double p2 = xins + zins;
+      if (p2 > 1.0) {
+        bScore = p2 - 1.0;
+        bPoint = 5;
+        bIsFurtherSide = true;
+      } else {
+        bScore = 1.0 - p2;
+        bPoint = 2;
+        bIsFurtherSide = false;
+      }
+
+      // The closest out of the two (0,0,1) and (1,1,0) will replace the
+      // furthest out of the two decided above if closer.
+      double p3 = yins + zins;
+      if (p3 > 1.0) {
+        double score = p3 - 1.0;
+        if (aScore <= bScore && aScore < score) {
+          aScore = score;
+          aPoint = 6;
+          aIsFurtherSide = true;
+        } else if (aScore > bScore && bScore < score) {
+          bScore = score;
+          bPoint = 6;
+          bIsFurtherSide = true;
+        }
+      } else {
+        double score = 1.0 - p3;
+        if (aScore <= bScore && aScore < score) {
+          aScore = score;
+          aPoint = 1;
+          aIsFurtherSide = false;
+        } else if (aScore > bScore && bScore < score) {
+          bScore = score;
+          bPoint = 1;
+          bIsFurtherSide = false;
+        }
+      }
+
+      // Where each of the two closest points are determines how the
+      // extra two vertices are calculated.
+      if (aIsFurtherSide == bIsFurtherSide) {
+        if (aIsFurtherSide) {
+          // Both closest points on (1,1,1) side.
+
+          // One of the two extra points is (1,1,1)
+          dx_ext0 = dx0 - 1.0 - (SQUISH_CONSTANT_3D * 3);
+          dy_ext0 = dy0 - 1.0 - (SQUISH_CONSTANT_3D * 3);
+          dz_ext0 = dz0 - 1.0 - (SQUISH_CONSTANT_3D * 3);
+          xsv_ext0 = xsb + 1;
+          ysv_ext0 = ysb + 1;
+          zsv_ext0 = zsb + 1;
+
+          // Other extra point is based on the shared axis.
+          unsigned short c = aPoint & bPoint;
+          if ((c & 0x01) != 0) {
+            dx_ext1 = dx0 - 2.0 - (SQUISH_CONSTANT_3D * 2);
+            dy_ext1 = dy0 - (SQUISH_CONSTANT_3D * 2);
+            dz_ext1 = dz0 - (SQUISH_CONSTANT_3D * 2);
+            xsv_ext1 = xsb + 2;
+            ysv_ext1 = ysb;
+            zsv_ext1 = zsb;
+          } else if ((c & 0x02) != 0) {
+            dx_ext1 = dx0 - (SQUISH_CONSTANT_3D * 2);
+            dy_ext1 = dy0 - 2.0 - (SQUISH_CONSTANT_3D * 2);
+            dz_ext1 = dz0 - (SQUISH_CONSTANT_3D * 2);
+            xsv_ext1 = xsb;
+            ysv_ext1 = ysb + 2;
+            zsv_ext1 = zsb;
+          } else {
+            dx_ext1 = dx0 - (SQUISH_CONSTANT_3D * 2);
+            dy_ext1 = dy0 - (SQUISH_CONSTANT_3D * 2);
+            dz_ext1 = dz0 - 2 - (SQUISH_CONSTANT_3D * 2);
+            xsv_ext1 = xsb;
+            ysv_ext1 = ysb;
+            zsv_ext1 = zsb + 2;
+          }
+        } else {
+          // Both closest points on (0,0,0) side.
+
+          // One of the two extra points is (0,0,0).
+          dx_ext0 = dx0;
+          dy_ext0 = dy0;
+          dz_ext0 = dz0;
+          xsv_ext0 = xsb;
+          ysv_ext0 = ysb;
+          zsv_ext0 = zsb;
+
+          // The other extra point is based on the omitted axis.
+          unsigned short c = aPoint | bPoint;
+          if ((c & 0x01) == 0) {
+            dx_ext1 = dx0 + 1 - SQUISH_CONSTANT_3D;
+            dy_ext1 = dy0 - 1 - SQUISH_CONSTANT_3D;
+            dz_ext1 = dz0 - 1 - SQUISH_CONSTANT_3D;
+            xsv_ext1 = xsb - 1;
+            ysv_ext1 = ysb + 1;
+            zsv_ext1 = zsb + 1;
+          } else if ((c & 0x02) == 0) {
+            dx_ext1 = dx0 - 1 - SQUISH_CONSTANT_3D;
+            dy_ext1 = dy0 + 1 - SQUISH_CONSTANT_3D;
+            dz_ext1 = dz0 - 1 - SQUISH_CONSTANT_3D;
+            xsv_ext1 = xsb + 1;
+            ysv_ext1 = ysb - 1;
+            zsv_ext1 = zsb + 1;
+          } else {
+            dx_ext1 = dx0 - 1 - SQUISH_CONSTANT_3D;
+            dy_ext1 = dy0 - 1 - SQUISH_CONSTANT_3D;
+            dz_ext1 = dz0 + 1 - SQUISH_CONSTANT_3D;
+            xsv_ext1 = xsb + 1;
+            ysv_ext1 = ysb + 1;
+            zsv_ext1 = zsb - 1;
+          }
+        }
+      } else {
+        // One point on (0,0,0) side, one point on (1,1,1) side.
+
+        unsigned short c1, c2;
+        if (aIsFurtherSide) {
+          c1 = aPoint;
+          c2 = bPoint;
+        } else {
+          c1 = bPoint;
+          c2 = aPoint;
+        }
+
+        // One contribution is a permutation of (1,1,-1).
+        if ((c1 & 0x01) == 0) {
+          dx_ext0 = dx0 + 1 - SQUISH_CONSTANT_3D;
+          dy_ext0 = dy0 - 1 - SQUISH_CONSTANT_3D;
+          dz_ext0 = dz0 - 1 - SQUISH_CONSTANT_3D;
+          xsv_ext0 = xsb - 1;
+          ysv_ext0 = ysb + 1;
+          zsv_ext0 = zsb + 1;
+        } else if ((c1 & 0x02) == 0) {
+          dx_ext0 = dx0 - 1 - SQUISH_CONSTANT_3D;
+          dy_ext0 = dy0 + 1 - SQUISH_CONSTANT_3D;
+          dz_ext0 = dz0 - 1 - SQUISH_CONSTANT_3D;
+          xsv_ext0 = xsb + 1;
+          ysv_ext0 = ysb - 1;
+          zsv_ext0 = zsb + 1;
+        } else {
+          dx_ext0 = dx0 - 1 - SQUISH_CONSTANT_3D;
+          dy_ext0 = dy0 - 1 - SQUISH_CONSTANT_3D;
+          dz_ext0 = dz0 + 1 - SQUISH_CONSTANT_3D;
+          xsv_ext0 = xsb + 1;
+          ysv_ext0 = ysb + 1;
+          zsv_ext0 = zsb - 1;
+        }
+
+        // One contribution is a permutation of (0,0,2).
+        if ((c2 & 0x01) != 0) {
+          dx_ext1 = dx0 - 2 - (SQUISH_CONSTANT_3D * 2);
+          dy_ext1 = dy0 - (SQUISH_CONSTANT_3D * 2);
+          dz_ext1 = dz0 - (SQUISH_CONSTANT_3D * 2);
+          xsv_ext1 = xsb + 2;
+          ysv_ext1 = ysb;
+          zsv_ext1 = zsb;
+        } else if ((c2 & 0x02) != 0) {
+          dx_ext1 = dx0 - (SQUISH_CONSTANT_3D * 2);
+          dy_ext1 = dy0 - 2 - (SQUISH_CONSTANT_3D * 2);
+          dz_ext1 = dz0 - (SQUISH_CONSTANT_3D * 2);
+          xsv_ext1 = xsb;
+          ysv_ext1 = ysb + 2;
+          zsv_ext1 = zsb;
+        } else {
+          dx_ext1 = dx0 - (SQUISH_CONSTANT_3D * 2);
+          dy_ext1 = dy0 - (SQUISH_CONSTANT_3D * 2);
+          dz_ext1 = dz0 - 2 - (SQUISH_CONSTANT_3D * 2);
+          xsv_ext1 = xsb;
+          ysv_ext1 = ysb;
+          zsv_ext1 = zsb + 2;
+        }
+      }
+
+      // Contribution (0,0,1).
+      double dx1 = dx0 - 1 - SQUISH_CONSTANT_3D;
+      double dy1 = dy0 - SQUISH_CONSTANT_3D;
+      double dz1 = dz0 - SQUISH_CONSTANT_3D;
+      double attn1 = 2.0 - ((dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1));
+      if (attn1 > 0.0) {
+        value = std::pow(attn1, 4) * extrapolate(xsb + 1, ysb, zsb, dx1, dy1, dz1);
+      }
+
+      // Contribution (0,1,0).
+      double dx2 = dx0 - SQUISH_CONSTANT_3D;
+      double dy2 = dy0 - 1 - SQUISH_CONSTANT_3D;
+      double dz2 = dz1;
+      double attn2 = 2.0 - ((dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2));
+      if (attn2 > 0.0) {
+        value += std::pow(attn2, 4) * extrapolate(xsb, ysb + 1, zsb, dx2, dy2, dz2);
+      }
+
+      // Contribution (1,0,0).
+      double dx3 = dx2;
+      double dy3 = dy1;
+      double dz3 = dz0 - 1 - SQUISH_CONSTANT_3D;
+      double attn3 = 2.0 - ((dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3));
+      if (attn3 > 0.0) {
+        value += std::pow(attn3, 4) * extrapolate(xsb, ysb, zsb + 1, dx3, dy3, dz3);
+      }
+
+      // Contribution (1,1,0).
+      double dx4 = dx0 - 1 - (SQUISH_CONSTANT_3D * 2);
+      double dy4 = dy0 - 1 - (SQUISH_CONSTANT_3D * 2);
+      double dz4 = dz0 - (SQUISH_CONSTANT_3D * 2);
+      double attn4 = 2.0 - ((dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4));
+      if (attn4 > 0.0) {
+        value += std::pow(attn4, 4) * extrapolate(xsb + 1, ysb + 1, zsb + 0, dx4, dy4, dz4);
+      }
+
+      // Contribution (1,0,1).
+      double dx5 = dx4;
+      double dy5 = dy0 - (SQUISH_CONSTANT_3D * 2);
+      double dz5 = dz0 - 1 - (SQUISH_CONSTANT_3D * 2);
+      double attn5 = 2.0 - ((dx5 * dx5) + (dy5 * dy5) + (dz5 * dz5));
+      if (attn5 > 0.0) {
+        value += std::pow(attn5, 4) * extrapolate(xsb + 1, ysb, zsb + 1, dx5, dy5, dz5);
+      }
+
+      // Contribution (0,1,1).
+      double dx6 = dx0 - (SQUISH_CONSTANT_3D * 2);
+      double dy6 = dy4;
+      double dz6 = dz5;
+      double attn6 = 2.0 - ((dx6 * dx6) + (dy6 * dy6) + (dz6 * dz6));
+      if (attn6 > 0.0) {
+        value += std::pow(attn6, 4) * extrapolate(xsb, ysb + 1, zsb + 1, dx6, dy6, dz6);
+      }
+    }
+
+    // First extra vertex.
+    double attn_ext0 = 2.0 - ((dx_ext0 * dx_ext0) + (dy_ext0 * dy_ext0) + (dz_ext0 * dz_ext0));
+    if (attn_ext0 > 0.0) {
+      value += std::pow(attn_ext0, 4) * extrapolate(xsv_ext0, ysv_ext0, zsv_ext0, dx_ext0, dy_ext0, dz_ext0);
+    }
+
+    // Second extra vertex.
+    double attn_ext1 = 2.0 - ((dx_ext1 * dx_ext1) + (dy_ext1 * dy_ext1) + (dz_ext1 * dz_ext1));
+    if (attn_ext1 > 0.0) {
+      value += std::pow(attn_ext1, 4) * extrapolate(xsv_ext1, ysv_ext1, zsv_ext1, dx_ext1, dy_ext1, dz_ext1);
+    }
+
+    return value / NORM_CONSTANT;
+  }
+
+};
+
+// Array of gradient values for 3D.
+// New gradient set 2014-09-19.
+const short OpenSimplexNoise::gradients3D [72] = {
+  0, 3, 2,   0, 2, 3,   3, 0, 2,   2, 0, 3,   3, 2, 0,   2, 3, 0,
+  0,-3, 2,   0, 2,-3,  -3, 0, 2,   2, 0,-3,  -3, 2, 0,   2,-3, 0,
+  0, 3,-2,   0,-2, 3,   3, 0,-2,  -2, 0, 3,   3,-2, 0,  -2, 3, 0,
+  0,-3,-2,   0,-2,-3,  -3, 0,-2,  -2, 0,-3,  -3,-2, 0,  -2,-3, 0
+};
+
+// The standard permutation order as used in Ken Perlin's "Improved Noise"
+// (and basically every noise implementation on the Internet).
+const unsigned short OpenSimplexNoise::permDefault [256] = {
+  151,160,137, 91, 90, 15,131, 13,201, 95, 96, 53,194,233,  7,225,
+  140, 36,103, 30, 69,142,  8, 99, 37,240, 21, 10, 23,190,  6,148,
+  247,120,234, 75,  0, 26,197, 62, 94,252,219,203,117, 35, 11, 32,
+   57,177, 33, 88,237,149, 56, 87,174, 20,125,136,171,168, 68,175,
+   74,165, 71,134,139, 48, 27,166, 77,146,158,231, 83,111,229,122,
+   60,211,133,230,220,105, 92, 41, 55, 46,245, 40,244,102,143, 54,
+   65, 25, 63,161,  1,216, 80, 73,209, 76,132,187,208, 89, 18,169,
+  200,196,135,130,116,188,159, 86,164,100,109,198,173,186,  3, 64,
+   52,217,226,250,124,123,  5,202, 38,147,118,126,255, 82, 85,212,
+  207,206, 59,227, 47, 16, 58, 17,182,189, 28, 42,223,183,170,213,
+  119,248,152,  2, 44,154,163, 70,221,153,101,155,167, 43,172,  9,
+  129, 22, 39,253, 19, 98,108,110, 79,113,224,232,178,185,112,104,
+  218,246, 97,228,251, 34,242,193,238,210,144, 12,191,179,162,241,
+   81, 51,145,235,249, 14,239,107, 49,192,214, 31,181,199,106,157,
+  184, 84,204,176,115,121, 50, 45,127,  4,150,254,138,236,205, 93,
+  222,114, 67, 29, 24, 72,243,141,128,195, 78, 66,215, 61,156,180
+};
+
+#endif
