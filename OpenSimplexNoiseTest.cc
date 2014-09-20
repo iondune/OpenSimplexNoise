@@ -1,13 +1,15 @@
 /*
  * OpenSimplex (Simplectic) Noise Test in C++
- * Copyright 2014 Arthur Tombs
+ * by Arthur Tombs
+ *
+ * Modified 2014-09-20
  *
  * This file is intended to test the function of OpenSimplexNoise.hh.
  * It requires that you have development packages for libpng installed.
  * I am aware this is bad code; I wrote it in a hurry.
  *
  * Compile with:
- *   g++ -o OpenSimplexNoiseTest -O3 OpenSimplexNoiseTest.cc -lpng
+ *   g++ -o OpenSimplexNoiseTest -O2 OpenSimplexNoiseTest.cc -lpng
  *
  */
 
@@ -21,12 +23,20 @@
 
 const int WIDTH = 512;
 const int HEIGHT = 512;
-const double FEATURE_SIZE = 12.0;
+const double FEATURE_SIZE = 24.0;
 
 
 int main (int argc, char **args) {
 
   OpenSimplexNoise noise;
+
+  double * vals = new double [WIDTH * HEIGHT];
+
+  for (int y = 0; y < HEIGHT; y++) {
+    for (int x = 0; x < WIDTH; x++) {
+      vals[x+y*WIDTH] = noise.eval((double)x / FEATURE_SIZE, (double)y / FEATURE_SIZE, 0.0);
+    }
+  }
 
   {
     FILE * fp;
@@ -64,8 +74,7 @@ int main (int argc, char **args) {
     for (int y = 0; y < HEIGHT; y++) {
       png_byte row [WIDTH * 3];
       for (int x = 0; x < WIDTH; x++) {
-        double value = noise.eval((double)x / FEATURE_SIZE, (double)y / FEATURE_SIZE, 0.0);
-        png_byte rgbval = (png_byte)std::floor((value * 0.5 + 0.5) * 255.0 + 0.5);
+        png_byte rgbval = (png_byte)std::floor((vals[x+y*WIDTH] * 0.5 + 0.5) * 255.0 + 0.5);
         row[x*3] = row[x*3+1] = row[x*3+2] = rgbval;
       }
       png_write_row(png_ptr, row);
@@ -78,6 +87,8 @@ finish:
     if (fp != NULL) fclose(fp);
     if (info_ptr != NULL) png_free_data(png_ptr, info_ptr, PNG_FREE_ALL, -1);
     if (png_ptr != NULL) png_destroy_write_struct(&png_ptr, NULL);
+
+    delete [] vals;
 
   }
 

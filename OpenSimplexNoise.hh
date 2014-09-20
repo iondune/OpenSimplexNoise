@@ -1,29 +1,24 @@
 /*
  * OpenSimplex (Simplectic) Noise in C++
- * Copyright 2014 Arthur Tombs
+ * by Arthur Tombs
  *
- * This is a derivative work based on OpenSimplex by Kurt Spencer.
- * The original copyright notice follows below.
+ * Modified 2014-09-20
+ *
+ * This is a derivative work based on OpenSimplex by Kurt Spencer:
+ *   https://gist.github.com/KdotJPG/b1270127455a94ac5d19
+ *
+ * Anyone is free to make use of this software in whatever way they want.
+ * Attribution is appreciated, but not required.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/*
- * OpenSimplex (Simplectic) Noise in Java
- * Copyright 2014 Kurt Spencer
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * (v0.0.1 with new gradient set and corresponding normalization factor, 9/19/14)
- */
 
 #ifndef OPENSIMPLEXNOISE_HH
 #define OPENSIMPLEXNOISE_HH
@@ -31,32 +26,32 @@
 #include <cstdlib>
 #include <cmath>
 
-// TODO: Use a vector class and some template magic to extend this to
-//       higher dimensions.
+#define STRETCH_CONSTANT_3D (-1.0 / 6.0)
+#define SQUISH_CONSTANT_3D (1.0 / 3.0)
+
+// Normalization constant tested using over 4 billion evaluations to bound
+// range within [-1,1]. This is a safe upper-bound. Actual min/max values
+// found over the course of the 4 billion evaluations were
+// -28.12974224468639 (min) and 28.134269887817773 (max).
+// TODO: Can a mathematically correct value be derived?
+#define NORM_CONSTANT_3D 28.25
+
+
 class OpenSimplexNoise {
 
 private:
 
-  static const double STRETCH_CONSTANT_3D = -1.0 / 6.0;
-  static const double SQUISH_CONSTANT_3D  =  1.0 / 3.0;
-
-  // Normalization constant tested using over 4 billion evaluations to bound
-  // range within [-1,1]. This is a safe upper-bound. Actual min/max values
-  // found over the course of the 4 billion evaluations were
-  // -28.12974224468639 (min) and 28.134269887817773 (max).
-  static const double NORM_CONSTANT = 28.25;
-
   // Array of gradient values for 3D. Values are defined below the class definition.
-  static const short gradients3D [72];
+  static const int gradients3D [72];
 
   // The default permutation order. Values are defined below the class definition.
-  static const unsigned short permDefault [256];
+  static const int permDefault [256];
 
-  const unsigned short * perm;
-  const unsigned short * permGradIndex3D;
+  const int * perm;
+  const int * permGradIndex3D;
 
   double extrapolate (long xsb, long ysb, long zsb, double dx, double dy, double dz) const {
-    short index = permGradIndex3D[(perm[(perm[xsb & 0xFF] + ysb) & 0xFF] + zsb) & 0xFF];
+    unsigned int index = permGradIndex3D[(perm[(perm[xsb & 0xFF] + ysb) & 0xFF] + zsb) & 0xFF];
     return gradients3D[index] * dx +
            gradients3D[index + 1] * dy +
            gradients3D[index + 2] * dz;
@@ -64,11 +59,11 @@ private:
 
 public:
 
-  OpenSimplexNoise (const unsigned short * p = permDefault) : perm(p) {
-    unsigned short * pgi = new unsigned short [256];
-    for (short i = 0; i < 256; i++) {
+  OpenSimplexNoise (const int * p = permDefault) : perm(p) {
+    int * pgi = new int [256];
+    for (int i = 0; i < 256; i++) {
       // NB: 72 is the number of elements in the gradients3D array
-      pgi[i] = (unsigned short)((perm[i] % (72 / 3)) * 3);
+      pgi[i] = (int)((perm[i] % (72 / 3)) * 3);
     }
     permGradIndex3D = pgi;
   }
@@ -77,11 +72,11 @@ public:
   // 64-bit seed.
   // Generates a proper permutation (i.e. doesn't merely perform N
   // successive pair swaps on a base array)
-  OpenSimplexNoise (unsigned int seed) {
-    unsigned short * p = new unsigned short [256];
-    unsigned short * pgi = new unsigned short [256];
-    unsigned short source [256];
-    for (unsigned short i = 0; i<256; i++) {
+  OpenSimplexNoise (int seed) {
+    int * p = new int [256];
+    int * pgi = new int [256];
+    int source [256];
+    for (int i = 0; i<256; i++) {
       source[i] = i;
     }
     // TODO: Random number generator (C++11 only)
@@ -90,7 +85,7 @@ public:
       int r = (rand() % (i+1));
       p[i] = source[r];
       // NB: 72 is the number of elements in the gradients3D array
-      pgi[i] = (short)((p[i] % (72 / 3)) * 3);
+      pgi[i] = (int)((p[i] % (72 / 3)) * 3);
       source[r] = source[i];
     }
     perm = p;
@@ -99,6 +94,7 @@ public:
 
   ~OpenSimplexNoise (void) {
     if (perm != permDefault) delete [] perm;
+    delete [] permGradIndex3D;
   }
 
   double eval (double x, double y, double z) const {
@@ -150,9 +146,9 @@ public:
       // We are inside the tetrahedron (3-Simplex) at (0,0,0)
 
       // Determine which of (0,0,1), (0,1,0), (1,0,0) are closest.
-      unsigned short aPoint = 1;
+      unsigned char aPoint = 1;
       double aScore = xins;
-      unsigned short bPoint = 2;
+      unsigned char bPoint = 2;
       double bScore = yins;
       if (aScore >= bScore && zins > bScore) {
         bScore = zins;
@@ -171,7 +167,7 @@ public:
         // (0,0,0) is one of the closest two tetrahedral vertices.
 
         // Our other closest vertex is the closer of a and b.
-        unsigned short c = ((bScore > aScore) ? bPoint : aPoint);
+        unsigned char c = ((bScore > aScore) ? bPoint : aPoint);
 
         if (c == 1) {
           xsv_ext0 = xsv_ext1 = xsb + 1;
@@ -211,7 +207,7 @@ public:
         // (0,0,0) is not one of the closest two tetrahedral vertices.
 
         // The two extra vertices are determined by the closest two.
-        unsigned short c = (aPoint | bPoint);
+        unsigned char c = (aPoint | bPoint);
 
         if ((c & 0x01) == 0) {
           xsv_ext0 = xsb;
@@ -284,9 +280,9 @@ public:
 
       // Determine which two tetrahedral vertices are the closest
       // out of (1,1,0), (1,0,1), and (0,1,1), but not (1,1,1).
-      short aPoint = 6;
+      unsigned char aPoint = 6;
       double aScore = xins;
-      short bPoint = 5;
+      unsigned char bPoint = 5;
       double bScore = yins;
       if (aScore <= bScore && zins < bScore) {
         bScore = zins;
@@ -305,7 +301,7 @@ public:
         // (1,1,1) is one of the closest two tetrahedral vertices.
 
         // The other closest vertex is the closest of a and b.
-        unsigned short c = ((bScore < aScore) ? bPoint : aPoint);
+        unsigned char c = ((bScore < aScore) ? bPoint : aPoint);
 
         if ((c & 0x01) != 0) {
           xsv_ext0 = xsb + 2;
@@ -345,7 +341,7 @@ public:
         // (1,1,1) is not one of the closest two tetrahedral vertices.
 
         // The two extra vertices are determined by the closest two.
-        unsigned short c = aPoint & bPoint;
+        unsigned char c = aPoint & bPoint;
 
         if ((c & 0x01) != 0) {
           xsv_ext0 = xsb + 1;
@@ -420,10 +416,10 @@ public:
       // We are inside the octahedron (rectified 3-Simplex) inbetween.
 
       double aScore;
-      unsigned short aPoint;
+      unsigned char aPoint;
       bool aIsFurtherSide;
       double bScore;
-      unsigned short bPoint;
+      unsigned char bPoint;
       bool bIsFurtherSide;
 
       // Decide between point (1,0,0) and (0,1,1) as closest.
@@ -492,7 +488,7 @@ public:
           zsv_ext0 = zsb + 1;
 
           // Other extra point is based on the shared axis.
-          unsigned short c = aPoint & bPoint;
+          unsigned char c = aPoint & bPoint;
           if ((c & 0x01) != 0) {
             dx_ext1 = dx0 - 2.0 - (SQUISH_CONSTANT_3D * 2);
             dy_ext1 = dy0 - (SQUISH_CONSTANT_3D * 2);
@@ -527,7 +523,7 @@ public:
           zsv_ext0 = zsb;
 
           // The other extra point is based on the omitted axis.
-          unsigned short c = aPoint | bPoint;
+          unsigned char c = aPoint | bPoint;
           if ((c & 0x01) == 0) {
             dx_ext1 = dx0 + 1 - SQUISH_CONSTANT_3D;
             dy_ext1 = dy0 - 1 - SQUISH_CONSTANT_3D;
@@ -554,7 +550,7 @@ public:
       } else {
         // One point on (0,0,0) side, one point on (1,1,1) side.
 
-        unsigned short c1, c2;
+        unsigned char c1, c2;
         if (aIsFurtherSide) {
           c1 = aPoint;
           c2 = bPoint;
@@ -679,14 +675,14 @@ public:
       value += std::pow(attn_ext1, 4) * extrapolate(xsv_ext1, ysv_ext1, zsv_ext1, dx_ext1, dy_ext1, dz_ext1);
     }
 
-    return value / NORM_CONSTANT;
+    return (value / NORM_CONSTANT_3D);
   }
 
 };
 
 // Array of gradient values for 3D.
 // New gradient set 2014-09-19.
-const short OpenSimplexNoise::gradients3D [72] = {
+const int OpenSimplexNoise::gradients3D [72] = {
   0, 3, 2,   0, 2, 3,   3, 0, 2,   2, 0, 3,   3, 2, 0,   2, 3, 0,
   0,-3, 2,   0, 2,-3,  -3, 0, 2,   2, 0,-3,  -3, 2, 0,   2,-3, 0,
   0, 3,-2,   0,-2, 3,   3, 0,-2,  -2, 0, 3,   3,-2, 0,  -2, 3, 0,
@@ -695,7 +691,7 @@ const short OpenSimplexNoise::gradients3D [72] = {
 
 // The standard permutation order as used in Ken Perlin's "Improved Noise"
 // (and basically every noise implementation on the Internet).
-const unsigned short OpenSimplexNoise::permDefault [256] = {
+const int OpenSimplexNoise::permDefault [256] = {
   151,160,137, 91, 90, 15,131, 13,201, 95, 96, 53,194,233,  7,225,
   140, 36,103, 30, 69,142,  8, 99, 37,240, 21, 10, 23,190,  6,148,
   247,120,234, 75,  0, 26,197, 62, 94,252,219,203,117, 35, 11, 32,
@@ -713,5 +709,11 @@ const unsigned short OpenSimplexNoise::permDefault [256] = {
   184, 84,204,176,115,121, 50, 45,127,  4,150,254,138,236,205, 93,
   222,114, 67, 29, 24, 72,243,141,128,195, 78, 66,215, 61,156,180
 };
+
+
+#undef STRETCH_CONSTANT_3D
+#undef SQUISH_CONSTANT_3D
+#undef NORM_CONSTANT
+
 
 #endif
