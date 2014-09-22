@@ -2,7 +2,7 @@
  * OpenSimplex (Simplectic) Noise Test in C++
  * by Arthur Tombs
  *
- * Modified 2014-09-20
+ * Modified 2014-09-22
  *
  * This file is intended to test the function of OpenSimplexNoise.hh.
  * It requires that you have development packages for libpng installed.
@@ -11,9 +11,8 @@
  * Compile with:
  *   g++ -o OpenSimplexNoiseTest -O2 OpenSimplexNoiseTest.cc -lpng
  *
- * Additional optimization can be obtained with -ffast-math (at the cost of accuracy)
+ * Additional optimization can be obtained with -Ofast (at the cost of accuracy)
  * and -msse4 (or the highest level of SSE your CPU supports).
- *
  */
 
 
@@ -29,15 +28,17 @@ const int HEIGHT = 512;
 const double FEATURE_SIZE = 24.0;
 
 
-int main (int argc, char **args) {
+int main (void) {
 
   OpenSimplexNoise noise;
 
-  double * vals = new double [WIDTH * HEIGHT];
+  float * vals = new float [WIDTH * HEIGHT];
 
-  for (int y = 0; y < HEIGHT; y++) {
-    for (int x = 0; x < WIDTH; x++) {
-      vals[x+y*WIDTH] = noise.eval((double)x / FEATURE_SIZE, (double)y / FEATURE_SIZE, 0.0);
+  for (int yi = 0; yi < HEIGHT; yi++) {
+    double y = (-0.5 + yi / (double)(HEIGHT-1)) * (HEIGHT / FEATURE_SIZE);
+    for (int xi = 0; xi < WIDTH; xi++) {
+      double x = (-0.5 + xi / (double)(WIDTH-1)) * (WIDTH / FEATURE_SIZE);
+      vals[xi+yi*WIDTH] = noise.eval(x, y, 0.0);
     }
   }
 
