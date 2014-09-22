@@ -9,7 +9,10 @@
  * I am aware this is bad code; I wrote it in a hurry.
  *
  * Compile with:
- *   g++ -o OpenSimplexNoiseTest -O2 -ffast-math OpenSimplexNoiseTest.cc -lpng
+ *   g++ -o OpenSimplexNoiseTest -O2 OpenSimplexNoiseTest.cc -lpng
+ *
+ * Additional optimization can be obtained with -ffast-math (at the cost of accuracy)
+ * and -msse4 (or the highest level of SSE your CPU supports).
  *
  */
 
