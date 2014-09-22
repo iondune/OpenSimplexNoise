@@ -9,7 +9,7 @@
  * I am aware this is bad code; I wrote it in a hurry.
  *
  * Compile with:
- *   g++ -o OpenSimplexNoiseTest -O2 OpenSimplexNoiseTest.cc -lpng
+ *   g++ -o OpenSimplexNoiseTest -O2 -ffast-math OpenSimplexNoiseTest.cc -lpng
  *
  */
 
