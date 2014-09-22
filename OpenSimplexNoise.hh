@@ -452,34 +452,34 @@ public:
 
         if (c & 0x01) {
           xsv_ext0 = xsv_ext1 = xsb + 1;
-          dx_ext0 = dx0 - 1.0f - (SQUISH_CONSTANT_3D * 2.0f);
+          dx_ext0 = dx0 - 1.0f - (SQUISH_CONSTANT_3D * 2);
           dx_ext1 = dx0 - 1.0f - SQUISH_CONSTANT_3D;
         } else {
           xsv_ext0 = xsb;
           xsv_ext1 = xsb - 1;
-          dx_ext0 = dx0 - (SQUISH_CONSTANT_3D * 2.0f);
+          dx_ext0 = dx0 - (SQUISH_CONSTANT_3D * 2);
           dx_ext1 = dx0 + 1.0f - SQUISH_CONSTANT_3D;
         }
 
         if (c & 0x02) {
           ysv_ext0 = ysv_ext1 = ysb + 1;
-          dy_ext0 = dy0 - 1.0f - (SQUISH_CONSTANT_3D * 2.0f);
+          dy_ext0 = dy0 - 1.0f - (SQUISH_CONSTANT_3D * 2);
           dy_ext1 = dy0 - 1.0f - SQUISH_CONSTANT_3D;
         } else {
           ysv_ext0 = ysb;
           ysv_ext1 = ysb - 1;
-          dy_ext0 = dy0 - (SQUISH_CONSTANT_3D * 2.0f);
+          dy_ext0 = dy0 - (SQUISH_CONSTANT_3D * 2);
           dy_ext1 = dy0 + 1.0f - SQUISH_CONSTANT_3D;
         }
 
         if (c & 0x04) {
           zsv_ext0 = zsv_ext1 = zsb + 1;
-          dz_ext0 = dz0 - 1.0f - (SQUISH_CONSTANT_3D * 2.0f);
+          dz_ext0 = dz0 - 1.0f - (SQUISH_CONSTANT_3D * 2);
           dz_ext1 = dz0 - 1.0f - SQUISH_CONSTANT_3D;
         } else {
           zsv_ext0 = zsb;
           zsv_ext1 = zsb - 1;
-          dz_ext0 = dz0 - (SQUISH_CONSTANT_3D * 2.0f);
+          dz_ext0 = dz0 - (SQUISH_CONSTANT_3D * 2);
           dz_ext1 = dz0 + 1.0f - SQUISH_CONSTANT_3D;
         }
       }
