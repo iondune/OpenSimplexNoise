@@ -232,7 +232,7 @@ public:
             zsv_ext1 = zsb + 2;
             dx_ext1 = dx0 - (SQUISH_CONSTANT_3D * 2);
             dy_ext1 = dy0 - (SQUISH_CONSTANT_3D * 2);
-            dz_ext1 = dz0 - 2 - (SQUISH_CONSTANT_3D * 2);
+            dz_ext1 = dz0 - 2.0 - (SQUISH_CONSTANT_3D * 2);
           }
         } else {
           // Both closest points are on the (0,0,0) side.
