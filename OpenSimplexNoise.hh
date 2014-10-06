@@ -26,15 +26,12 @@
 #include <cstdlib>
 #include <cmath>
 
+// (1 / sqrt(3 + 1) - 1) / 3
 #define STRETCH_CONSTANT_3D (-1.0f / 6.0f)
+// (sqrt(3 + 1) - 1) / 3
 #define SQUISH_CONSTANT_3D (1.0f / 3.0f)
 
-// Normalization constant tested using over 4 billion evaluations to bound
-// range within [-1,1]. This is a safe upper-bound. Actual min/max values
-// found over the course of the 4 billion evaluations were
-// -28.12974224468639 (min) and 28.134269887817773 (max).
-// TODO: Can a mathematically correct value be derived?
-#define NORM_CONSTANT_3D 28.25f
+#define NORM_CONSTANT_3D 103.0f
 
 class OpenSimplexNoise {
 
@@ -670,13 +667,15 @@ public:
 
 };
 
-// Array of gradient values for 3D.
-// New gradient set 2014-09-19.
+// Array of gradient values for 3D. They approximate the directions to the
+// vertices of a rhombicuboctahedron from its center, skewed so that the
+// triangular and square facets can be inscribed in circles of the same radius.
+// New gradient set 2014-10-06.
 const int OpenSimplexNoise::gradients3D [72] = {
-  0, 3, 2,   0, 2, 3,   3, 0, 2,   2, 0, 3,   3, 2, 0,   2, 3, 0,
-  0,-3, 2,   0, 2,-3,  -3, 0, 2,   2, 0,-3,  -3, 2, 0,   2,-3, 0,
-  0, 3,-2,   0,-2, 3,   3, 0,-2,  -2, 0, 3,   3,-2, 0,  -2, 3, 0,
-  0,-3,-2,   0,-2,-3,  -3, 0,-2,  -2, 0,-3,  -3,-2, 0,  -2,-3, 0
+  -11, 4, 4,  -4, 11, 4,  -4, 4, 11,   11, 4, 4,   4, 11, 4,   4, 4, 11,
+  -11,-4, 4,  -4,-11, 4,  -4,-4, 11,   11,-4, 4,   4,-11, 4,   4,-4, 11,
+  -11, 4,-4,  -4, 11,-4,  -4, 4,-11,   11, 4,-4,   4, 11,-4,   4, 4,-11,
+  -11,-4,-4,  -4,-11,-4,  -4,-4,-11,   11,-4,-4,   4,-11,-4,   4,-4,-11
 };
 
 // The standard permutation order as used in Ken Perlin's "Improved Noise"
