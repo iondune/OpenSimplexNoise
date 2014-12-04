@@ -39,7 +39,7 @@
 #endif
 
 #ifdef OSN_USE_STATIC_ASSERT
-//#include <type_traits>
+#include <type_traits>
 #endif
 
 namespace OSN {
