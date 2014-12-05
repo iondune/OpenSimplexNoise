@@ -2,7 +2,7 @@
  * OpenSimplex (Simplectic) Noise in C++
  * by Arthur Tombs
  *
- * Modified 2014-12-04
+ * Modified 2014-12-05
  *
  * This is a derivative work based on OpenSimplex by Kurt Spencer:
  *   https://gist.github.com/KdotJPG/b1270127455a94ac5d19
@@ -26,25 +26,34 @@
 #include <cmath>
 
 #if __cplusplus < 201103L
-#pragma message("Info: Your compiler does not claim C++11 support. Some features may be unavailable.")
+  #pragma message("Info: Your compiler does not claim C++11 support. Some features may be unavailable.")
 #else
-#define OSN_USE_LONG_LONG
-#define OSN_USE_STATIC_ASSERT
+  #define OSN_USE_CSTDINT
+  #define OSN_USE_STATIC_ASSERT
 #endif
 
-#ifndef OSN_USE_LONG_LONG
-#pragma message("Info: Using legacy constructors. Define OSN_USE_LONG_LONG before including this header to force use of the 'long long' type.")
-// cstdlib is required for the srand and rand functions
-#include <cstdlib>
+#ifdef OSN_USE_CSTDINT
+  // cstdint is required for the int64_t type
+  #include <cstdint>
+#else
+  #pragma message("Info: Not using <cstdint> for fixed-width integral types. To enable this feature, define OSN_USE_CSTDINT before including this header.")
+  // cstdlib is required for the srand and rand functions
+  #include <cstdlib>
 #endif
 
 #ifdef OSN_USE_STATIC_ASSERT
-#include <type_traits>
+  // type_traits is required for the is_floating_point function
+  #include <type_traits>
 #endif
+
 
 namespace OSN {
 
-typedef unsigned char OSN_BYTE;
+#ifdef OSN_USE_CSTDINT
+  typedef uint_fast8_t OSN_BYTE;
+#else
+  typedef unsigned char OSN_BYTE;
+#endif
 
 
 class NoiseBase {
@@ -56,12 +65,12 @@ protected:
   // Empty constructor to allow child classes to set up perm themselves.
   NoiseBase (void) {}
 
-#ifdef OSN_USE_LONG_LONG
+#ifdef OSN_USE_CSTDINT
   // Perform one step of the Linear Congruential Generator algorithm.
-  inline static void LCG_STEP (long long & x) {
+  inline static void LCG_STEP (int64_t & x) {
     // Magic constants are attributed to Donald Knuth's MMIX implementation.
-    const long long MULTIPLIER = 6364136223846793005LL;
-    const long long INCREMENT  = 1442695040888963407LL;
+    const int64_t MULTIPLIER = 6364136223846793005LL;
+    const int64_t INCREMENT  = 1442695040888963407LL;
     x = ((x * MULTIPLIER) + INCREMENT);
   }
 
@@ -69,7 +78,7 @@ protected:
   // Generates a proper permutation (i.e. doesn't merely perform N successive
   // pair swaps on a base array).
   // Uses a simple 64-bit LCG.
-  NoiseBase (long long seed) {
+  NoiseBase (int64_t seed) {
     int source [256];
     for (int i = 0; i < 256; ++i) {
       source[i] = i;
@@ -132,8 +141,8 @@ private:
 
 public:
 
-#ifdef OSN_USE_LONG_LONG
-  Noise (long long seed = 0LL) : NoiseBase (seed) {
+#ifdef OSN_USE_CSTDINT
+  Noise (int64_t seed = 0LL) : NoiseBase (seed) {
 #ifdef OSN_USE_STATIC_ASSERT
     static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
 #endif
@@ -228,8 +237,8 @@ public:
         // (1,0) and (0,1) are the closest two vertices.
         xsv_ext = xsb + 1;
         ysv_ext = ysb + 1;
-        dx_ext = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        dy_ext = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+        dx_ext = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        dy_ext = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
       }
     } else {
       // Inside the triangle (2-Simplex) at (1,1).
@@ -239,13 +248,13 @@ public:
         if (xins > yins) {
           xsv_ext = xsb + 2;
           ysv_ext = ysb;
-          dx_ext = dx0 - (T)2.0 - (SQUISH_CONSTANT * 2);
-          dy_ext = dy0 - (SQUISH_CONSTANT * 2);
+          dx_ext = dx0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext = dy0 - (SQUISH_CONSTANT * (T)2.0);
         } else {
           xsv_ext = xsb;
           ysv_ext = ysb + 2;
-          dx_ext = dx0 - (SQUISH_CONSTANT * 2);
-          dy_ext = dy0 - (T)2.0 - (SQUISH_CONSTANT * 2);
+          dx_ext = dx0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext = dy0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
         }
       } else {
         // (1,0) and (0,1) are the closest two vertices.
@@ -256,8 +265,8 @@ public:
       }
       xsb += 1;
       ysb += 1;
-      dx0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      dy0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+      dx0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      dy0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
     }
 
     // Contribution (0,0) or (1,1).
@@ -315,12 +324,12 @@ private:
 
 public:
 
-#ifdef OSN_USE_LONG_LONG
+#ifdef OSN_USE_CSTDINT
   // Initializes the class using a permutation array generated from a 64-bit seed.
   // Generates a proper permutation (i.e. doesn't merely perform N successive
   // pair swaps on a base array).
   // Uses a simple 64-bit LCG.
-  Noise (long long seed = 0LL) : NoiseBase () {
+  Noise (int64_t seed = 0LL) : NoiseBase () {
 #ifdef OSN_USE_STATIC_ASSERT
     static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
 #endif
@@ -503,9 +512,9 @@ public:
           xsv_ext0 = xsb + 1;
           ysv_ext0 = ysb + 1;
           zsv_ext0 = zsb + 1;
-          dx_ext0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-          dy_ext0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-          dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+          dx_ext0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+          dy_ext0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+          dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
 
           // Other extra point is based on the shared axis.
           OSN_BYTE c = aPoint & bPoint;
@@ -513,23 +522,23 @@ public:
             xsv_ext1 = xsb + 2;
             ysv_ext1 = ysb;
             zsv_ext1 = zsb;
-            dx_ext1 = dx0 - (T)2.0 - (SQUISH_CONSTANT * 2);
-            dy_ext1 = dy0 - (SQUISH_CONSTANT * 2);
-            dz_ext1 = dz0 - (SQUISH_CONSTANT * 2);
+            dx_ext1 = dx0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
+            dy_ext1 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+            dz_ext1 = dz0 - (SQUISH_CONSTANT * (T)2.0);
           } else if (c & 0x02) {
             xsv_ext1 = xsb;
             ysv_ext1 = ysb + 2;
             zsv_ext1 = zsb;
-            dx_ext1 = dx0 - (SQUISH_CONSTANT * 2);
-            dy_ext1 = dy0 - (T)2.0 - (SQUISH_CONSTANT * 2);
-            dz_ext1 = dz0 - (SQUISH_CONSTANT * 2);
+            dx_ext1 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+            dy_ext1 = dy0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
+            dz_ext1 = dz0 - (SQUISH_CONSTANT * (T)2.0);
           } else {
             xsv_ext1 = xsb;
             ysv_ext1 = ysb;
             zsv_ext1 = zsb + 2;
-            dx_ext1 = dx0 - (SQUISH_CONSTANT * 2);
-            dy_ext1 = dy0 - (SQUISH_CONSTANT * 2);
-            dz_ext1 = dz0 - (T)2.0 - (SQUISH_CONSTANT * 2);
+            dx_ext1 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+            dy_ext1 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+            dz_ext1 = dz0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
           }
         } else {
           // Both closest points are on the (0,0,0) side.
@@ -608,23 +617,23 @@ public:
           xsv_ext1 = xsb + 2;
           ysv_ext1 = ysb;
           zsv_ext1 = zsb;
-          dx_ext1 = dx0 - (T)2.0 - (SQUISH_CONSTANT * 2);
-          dy_ext1 = dy0 - (SQUISH_CONSTANT * 2);
-          dz_ext1 = dz0 - (SQUISH_CONSTANT * 2);
+          dx_ext1 = dx0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext1 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+          dz_ext1 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         } else if (c2 & 0x02) {
           xsv_ext1 = xsb;
           ysv_ext1 = ysb + 2;
           zsv_ext1 = zsb;
-          dx_ext1 = dx0 - (SQUISH_CONSTANT * 2);
-          dy_ext1 = dy0 - (T)2.0 - (SQUISH_CONSTANT * 2);
-          dz_ext1 = dz0 - (SQUISH_CONSTANT * 2);
+          dx_ext1 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext1 = dy0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
+          dz_ext1 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         } else {
           xsv_ext1 = xsb;
           ysv_ext1 = ysb;
           zsv_ext1 = zsb + 2;
-          dx_ext1 = dx0 - (SQUISH_CONSTANT * 2);
-          dy_ext1 = dy0 - (SQUISH_CONSTANT * 2);
-          dz_ext1 = dz0 - (T)2.0 - (SQUISH_CONSTANT * 2);
+          dx_ext1 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext1 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+          dz_ext1 = dz0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
         }
       }
 
@@ -650,21 +659,21 @@ public:
       value += std::pow(std::max((T)2.0 - attn3, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, dx3, dy3, dz3);
 
       // Contribution (1,1,0).
-      T dx4 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dy4 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dz4 = dz0 - (SQUISH_CONSTANT * 2);
+      T dx4 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dy4 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dz4 = dz0 - (SQUISH_CONSTANT * (T)2.0);
       T attn4 = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4);
       value += std::pow(std::max((T)2.0 - attn4, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb + 0, dx4, dy4, dz4);
 
       // Contribution (1,0,1).
       T dx5 = dx4;
-      T dy5 = dy0 - (SQUISH_CONSTANT * 2);
-      T dz5 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+      T dy5 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+      T dz5 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
       T attn5 = (dx5 * dx5) + (dy5 * dy5) + (dz5 * dz5);
       value += std::pow(std::max((T)2.0 - attn5, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, dx5, dy5, dz5);
 
       // Contribution (0,1,1).
-      T dx6 = dx0 - (SQUISH_CONSTANT * 2);
+      T dx6 = dx0 - (SQUISH_CONSTANT * (T)2.0);
       T dy6 = dy4;
       T dz6 = dz5;
       T attn6 = (dx6 * dx6) + (dy6 * dy6) + (dz6 * dz6);
@@ -737,34 +746,34 @@ public:
 
         if (c & 0x01) {
           xsv_ext0 = xsv_ext1 = xsb + 1;
-          dx_ext0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+          dx_ext0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           dx_ext1 = dx0 - (T)1.0 - SQUISH_CONSTANT;
         } else {
           xsv_ext0 = xsb;
           xsv_ext1 = xsb - 1;
-          dx_ext0 = dx0 - (SQUISH_CONSTANT * 2);
+          dx_ext0 = dx0 - (SQUISH_CONSTANT * (T)2.0);
           dx_ext1 = dx0 + (T)1.0 - SQUISH_CONSTANT;
         }
 
         if (c & 0x02) {
           ysv_ext0 = ysv_ext1 = ysb + 1;
-          dy_ext0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+          dy_ext0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           dy_ext1 = dy0 - (T)1.0 - SQUISH_CONSTANT;
         } else {
           ysv_ext0 = ysb;
           ysv_ext1 = ysb - 1;
-          dy_ext0 = dy0 - (SQUISH_CONSTANT * 2);
+          dy_ext0 = dy0 - (SQUISH_CONSTANT * (T)2.0);
           dy_ext1 = dy0 + (T)1.0 - SQUISH_CONSTANT;
         }
 
         if (c & 0x04) {
           zsv_ext0 = zsv_ext1 = zsb + 1;
-          dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+          dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           dz_ext1 = dz0 - (T)1.0 - SQUISH_CONSTANT;
         } else {
           zsv_ext0 = zsb;
           zsv_ext1 = zsb - 1;
-          dz_ext0 = dz0 - (SQUISH_CONSTANT * 2);
+          dz_ext0 = dz0 - (SQUISH_CONSTANT * (T)2.0);
           dz_ext1 = dz0 + (T)1.0 - SQUISH_CONSTANT;
         }
       }
@@ -823,16 +832,16 @@ public:
         if (c & 0x01) {
           xsv_ext0 = xsb + 2;
           xsv_ext1 = xsb + 1;
-          dx_ext0 = dx0 - (T)2.0 - (SQUISH_CONSTANT * 3);
-          dx_ext1 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+          dx_ext0 = dx0 - (T)2.0 - (SQUISH_CONSTANT * (T)3.0);
+          dx_ext1 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
         } else {
           xsv_ext0 = xsv_ext1 = xsb;
-          dx_ext0 = dx_ext1 = dx0 - (SQUISH_CONSTANT * 3);
+          dx_ext0 = dx_ext1 = dx0 - (SQUISH_CONSTANT * (T)3.0);
         }
 
         if (c & 0x02) {
           ysv_ext0 = ysv_ext1 = ysb + 1;
-          dy_ext0 = dy_ext1 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+          dy_ext0 = dy_ext1 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
           if (c & 0x01) {
             ysv_ext1 += 1;
             dy_ext1 -= (T)1.0;
@@ -842,17 +851,17 @@ public:
           }
         } else {
           ysv_ext0 = ysv_ext1 = ysb;
-          dy_ext0 = dy_ext1 = dy0 - (SQUISH_CONSTANT * 3);
+          dy_ext0 = dy_ext1 = dy0 - (SQUISH_CONSTANT * (T)3.0);
         }
 
         if (c & 0x04) {
           zsv_ext0 = zsb + 1;
           zsv_ext1 = zsb + 2;
-          dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-          dz_ext1 = dz0 - (T)2.0 - (SQUISH_CONSTANT * 3);
+          dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+          dz_ext1 = dz0 - (T)2.0 - (SQUISH_CONSTANT * (T)3.0);
         } else {
           zsv_ext0 = zsv_ext1 = zsb;
-          dz_ext0 = dz_ext1 = dz0 - (SQUISH_CONSTANT * 3);
+          dz_ext0 = dz_ext1 = dz0 - (SQUISH_CONSTANT * (T)3.0);
         }
       } else {
         // (1,1,1) is not one of the closest two tetrahedral vertices.
@@ -864,61 +873,61 @@ public:
           xsv_ext0 = xsb + 1;
           xsv_ext1 = xsb + 2;
           dx_ext0 = dx0 - (T)1.0 - SQUISH_CONSTANT;
-          dx_ext1 = dx0 - (T)2.0 - (SQUISH_CONSTANT * 2);
+          dx_ext1 = dx0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
         } else {
           xsv_ext0 = xsv_ext1 = xsb;
           dx_ext0 = dx0 - SQUISH_CONSTANT;
-          dx_ext1 = dx0 - (SQUISH_CONSTANT * 2);
+          dx_ext1 = dx0 - (SQUISH_CONSTANT * (T)2.0);
         }
 
         if (c & 0x02) {
           ysv_ext0 = ysb + 1;
           ysv_ext1 = ysb + 2;
           dy_ext0 = dy0 - (T)1.0 - SQUISH_CONSTANT;
-          dy_ext1 = dy0 - (T)2.0 - (SQUISH_CONSTANT * 2);
+          dy_ext1 = dy0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
         } else {
           ysv_ext0 = ysv_ext1 = ysb;
           dy_ext0 = dy0 - SQUISH_CONSTANT;
-          dy_ext1 = dy0 - (SQUISH_CONSTANT * 2);
+          dy_ext1 = dy0 - (SQUISH_CONSTANT * (T)2.0);
         }
 
         if (c & 0x04) {
           zsv_ext0 = zsb + 1;
           zsv_ext1 = zsb + 2;
           dz_ext0 = dz0 - (T)1.0 - SQUISH_CONSTANT;
-          dz_ext1 = dz0 - (T)2.0 - (SQUISH_CONSTANT * 2);
+          dz_ext1 = dz0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
         } else {
           zsv_ext0 = zsv_ext1 = zsb;
           dz_ext0 = dz0 - SQUISH_CONSTANT;
-          dz_ext1 = dz0 - (SQUISH_CONSTANT * 2);
+          dz_ext1 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         }
       }
 
       // Contribution (1,1,0)
-      T dx3 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dy3 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dz3 = dz0 - (SQUISH_CONSTANT * 2);
+      T dx3 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dy3 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dz3 = dz0 - (SQUISH_CONSTANT * (T)2.0);
       T attn3 = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3);
       value = std::pow(std::max((T)2.0 - attn3, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, dx3, dy3, dz3);
 
       // Contribution (1,0,1)
       T dx2 = dx3;
-      T dy2 = dy0 - (SQUISH_CONSTANT * 2);
-      T dz2 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+      T dy2 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+      T dz2 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
       T attn2 = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2);
       value += std::pow(std::max((T)2.0 - attn2, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, dx2, dy2, dz2);
 
       // Contribution (0,1,1)
-      T dx1 = dx0 - (SQUISH_CONSTANT * 2);
+      T dx1 = dx0 - (SQUISH_CONSTANT * (T)2.0);
       T dy1 = dy3;
       T dz1 = dz2;
       T attn1 = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1);
       value += std::pow(std::max((T)2.0 - attn1, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, dx1, dy1, dz1);
 
       // Contribution (1,1,1)
-      dx0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-      dy0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-      dz0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+      dx0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+      dy0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+      dz0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
       T attn0 = (dx0 * dx0) + (dy0 * dy0) + (dz0 * dz0);
       value += std::pow(std::max((T)2.0 - attn0, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb + 1, dx0, dy0, dz0);
     }
@@ -972,8 +981,8 @@ private:
 
 public:
 
-#ifdef OSN_USE_LONG_LONG
-  Noise (long long seed = 0LL) : NoiseBase (seed) {
+#ifdef OSN_USE_CSTDINT
+  Noise (int64_t seed = 0LL) : NoiseBase (seed) {
 #ifdef OSN_USE_STATIC_ASSERT
     static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
 #endif
@@ -1142,18 +1151,18 @@ public:
         if (!(c & 0x01)) {
           xsv_ext0 = xsv_ext2 = xsb;
           xsv_ext1 = xsb - 1;
-          dx_ext0 = dx0 - (SQUISH_CONSTANT * 2);
+          dx_ext0 = dx0 - (SQUISH_CONSTANT * (T)2.0);
           dx_ext1 = dx0 + (T)1.0 - SQUISH_CONSTANT;
           dx_ext2 = dx0 - SQUISH_CONSTANT;
         } else {
           xsv_ext0 = xsv_ext1 = xsv_ext2 = xsb + 1;
-          dx_ext0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+          dx_ext0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           dx_ext1 = dx_ext2 = dx0 - (T)1.0 - SQUISH_CONSTANT;
         }
 
         if (!(c & 0x02)) {
           ysv_ext0 = ysv_ext1 = ysv_ext2 = ysb;
-          dy_ext0 = dy0 - (SQUISH_CONSTANT * 2);
+          dy_ext0 = dy0 - (SQUISH_CONSTANT * (T)2.0);
           dy_ext1 = dy_ext2 = dy0 - SQUISH_CONSTANT;
           if (c & 0x01) {
             ysv_ext1 -= 1;
@@ -1164,13 +1173,13 @@ public:
           }
         } else {
           ysv_ext0 = ysv_ext1 = ysv_ext2 = ysb + 1;
-          dy_ext0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+          dy_ext0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           dy_ext1 = dy_ext2 = dy0 - (T)1.0 - SQUISH_CONSTANT;
         }
 
         if (!(c & 0x04)) {
           zsv_ext0 = zsv_ext1 = zsv_ext2 = zsb;
-          dz_ext0 = dz0 - (SQUISH_CONSTANT * 2);
+          dz_ext0 = dz0 - (SQUISH_CONSTANT * (T)2.0);
           dz_ext1 = dz_ext2 = dz0 - SQUISH_CONSTANT;
           if (c & 0x03) {
             zsv_ext1 -= 1;
@@ -1181,19 +1190,19 @@ public:
           }
         } else {
           zsv_ext0 = zsv_ext1 = zsv_ext2 = zsb + 1;
-          dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+          dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           dz_ext1 = dz_ext2 = dz0 - (T)1.0 - SQUISH_CONSTANT;
         }
 
         if (!(c & 0x08)) {
           wsv_ext0 = wsv_ext1 = wsb;
           wsv_ext2 = wsb - 1;
-          dw_ext0 = dw0 - (SQUISH_CONSTANT * 2);
+          dw_ext0 = dw0 - (SQUISH_CONSTANT * (T)2.0);
           dw_ext1 = dw0 - SQUISH_CONSTANT;
           dw_ext2 = dw0 + (T)1.0 - SQUISH_CONSTANT;
         } else {
           wsv_ext0 = wsv_ext1 = wsv_ext2 = wsb + 1;
-          dw_ext0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+          dw_ext0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           dw_ext1 = dw_ext2 = dw0 - (T)1.0 - SQUISH_CONSTANT;
         }
       }
@@ -1326,19 +1335,19 @@ public:
         if (c & 0x01) {
           xsv_ext0 = xsv_ext2 = xsb + 1;
           xsv_ext1 = xsb + 2;
-          dx_ext0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-          dx_ext1 = dx0 - (T)2.0 - (SQUISH_CONSTANT * 3);
-          dx_ext2 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+          dx_ext0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+          dx_ext1 = dx0 - (T)2.0 - (SQUISH_CONSTANT * (T)3.0);
+          dx_ext2 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
         } else {
           xsv_ext0 = xsv_ext1 = xsv_ext2 = xsb;
-          dx_ext0 = dx0 - (SQUISH_CONSTANT * 2);
-          dx_ext1 = dx_ext2 = dx0 - (SQUISH_CONSTANT * 3);
+          dx_ext0 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+          dx_ext1 = dx_ext2 = dx0 - (SQUISH_CONSTANT * (T)3.0);
         }
 
         if (c & 0x02) {
           ysv_ext0 = ysv_ext1 = ysv_ext2 = ysb + 1;
-          dy_ext0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-          dy_ext1 = dy_ext2 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+          dy_ext0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext1 = dy_ext2 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
           if (c & 0x01) {
             ysv_ext2 += 1;
             dy_ext2 -= (T)1.0;
@@ -1348,14 +1357,14 @@ public:
           }
         } else {
           ysv_ext0 = ysv_ext1 = ysv_ext2 = ysb;
-          dy_ext0 = dy0 - (SQUISH_CONSTANT * 2);
-          dy_ext1 = dy_ext2 = dy0 - (SQUISH_CONSTANT * 3);
+          dy_ext0 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext1 = dy_ext2 = dy0 - (SQUISH_CONSTANT * (T)3.0);
         }
 
         if (c & 0x04) {
           zsv_ext0 = zsv_ext1 = zsv_ext2 = zsb + 1;
-          dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-          dz_ext1 = dz_ext2 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+          dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+          dz_ext1 = dz_ext2 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
           if (c & 0x03) {
             zsv_ext2 += 1;
             dz_ext2 -= (T)1.0;
@@ -1365,49 +1374,49 @@ public:
           }
         } else {
           zsv_ext0 = zsv_ext1 = zsv_ext2 = zsb;
-          dz_ext0 = dz0 - (SQUISH_CONSTANT * 2);
-          dz_ext1 = dz_ext2 = dz0 - (SQUISH_CONSTANT * 3);
+          dz_ext0 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+          dz_ext1 = dz_ext2 = dz0 - (SQUISH_CONSTANT * (T)3.0);
         }
 
         if (c & 0x08) {
           wsv_ext0 = wsv_ext1 = wsb + 1;
           wsv_ext2 = wsb + 2;
-          dw_ext0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-          dw_ext1 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-          dw_ext2 = dw0 - (T)2.0 - (SQUISH_CONSTANT * 3);
+          dw_ext0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+          dw_ext1 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+          dw_ext2 = dw0 - (T)2.0 - (SQUISH_CONSTANT * (T)3.0);
         } else {
           wsv_ext0 = wsv_ext1 = wsv_ext2 = wsb;
-          dw_ext0 = dw0 - (SQUISH_CONSTANT * 2);
-          dw_ext1 = dw_ext2 = dw0 - (SQUISH_CONSTANT * 3);
+          dw_ext0 = dw0 - (SQUISH_CONSTANT * (T)2.0);
+          dw_ext1 = dw_ext2 = dw0 - (SQUISH_CONSTANT * (T)3.0);
         }
       }
 
       // Contribution (1,1,1,0).
-      T dx4 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-      T dy4 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-      T dz4 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-      T dw4 = dw0 - (SQUISH_CONSTANT * 3);
+      T dx4 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+      T dy4 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+      T dz4 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+      T dw4 = dw0 - (SQUISH_CONSTANT * (T)3.0);
       T attn4 = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4) + (dw4 * dw4);
       value = std::pow(std::max((T)2.0 - attn4, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb + 1, wsb, dx4, dy4, dz4, dw4);
 
       // Contribution (1,1,0,1).
       T dx3 = dx4;
       T dy3 = dy4;
-      T dz3 = dz0 - (SQUISH_CONSTANT * 3);
-      T dw3 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+      T dz3 = dz0 - (SQUISH_CONSTANT * (T)3.0);
+      T dw3 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
       T attn3 = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3) + (dw3 * dw3);
       value += std::pow(std::max((T)2.0 - attn3, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb + 1, dx3, dy3, dz3, dw3);
 
       // Contribution (1,0,1,1).
       T dx2 = dx4;
-      T dy2 = dy0 - (SQUISH_CONSTANT * 3);
+      T dy2 = dy0 - (SQUISH_CONSTANT * (T)3.0);
       T dz2 = dz4;
       T dw2 = dw3;
       T attn2 = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2) + (dw2 * dw2);
       value += std::pow(std::max((T)2.0 - attn2, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb + 1, dx2, dy2, dz2, dw2);
 
       // Contribution (0,1,1,1).
-      T dx1 = dx0 - (SQUISH_CONSTANT * 3);
+      T dx1 = dx0 - (SQUISH_CONSTANT * (T)3.0);
       T dy1 = dy4;
       T dz1 = dz4;
       T dw1 = dw3;
@@ -1529,45 +1538,45 @@ public:
           if (!(c1 & 0x01)) {
             xsv_ext0 = xsb;
             xsv_ext1 = xsb - 1;
-            dx_ext0 = dx0 - (SQUISH_CONSTANT * 3);
-            dx_ext1 = dx0 + (T)1.0 - (SQUISH_CONSTANT * 2);
+            dx_ext0 = dx0 - (SQUISH_CONSTANT * (T)3.0);
+            dx_ext1 = dx0 + (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           } else {
             xsv_ext0 = xsv_ext1 = xsb + 1;
-            dx_ext0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-            dx_ext1 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+            dx_ext0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+            dx_ext1 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           }
 
           if (!(c1 & 0x02)) {
             ysv_ext0 = ysb;
             ysv_ext1 = ysb - 1;
-            dy_ext0 = dy0 - (SQUISH_CONSTANT * 3);
-            dy_ext1 = dy0 + (T)1.0 - (SQUISH_CONSTANT * 2);
+            dy_ext0 = dy0 - (SQUISH_CONSTANT * (T)3.0);
+            dy_ext1 = dy0 + (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           } else {
             ysv_ext0 = ysv_ext1 = ysb + 1;
-            dy_ext0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-            dy_ext1 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+            dy_ext0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+            dy_ext1 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           }
 
           if (!(c1 & 0x04)) {
             zsv_ext0 = zsb;
             zsv_ext1 = zsb - 1;
-            dz_ext0 = dz0 - (SQUISH_CONSTANT * 3);
-            dz_ext1 = dz0 + (T)1.0 - (SQUISH_CONSTANT * 2);
+            dz_ext0 = dz0 - (SQUISH_CONSTANT * (T)3.0);
+            dz_ext1 = dz0 + (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           } else {
             zsv_ext0 = zsv_ext1 = zsb + 1;
-            dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-            dz_ext1 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+            dz_ext0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+            dz_ext1 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           }
 
           if (!(c1 & 0x08)) {
             wsv_ext0 = wsb;
             wsv_ext1 = wsb - 1;
-            dw_ext0 = dw0 - (SQUISH_CONSTANT * 3);
-            dw_ext1 = dw0 + (T)1.0 - (SQUISH_CONSTANT * 2);
+            dw_ext0 = dw0 - (SQUISH_CONSTANT * (T)3.0);
+            dw_ext1 = dw0 + (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           } else {
             wsv_ext0 = wsv_ext1 = wsb + 1;
-            dw_ext0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-            dw_ext1 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+            dw_ext0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+            dw_ext1 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           }
 
           // One combination is a permutation of (0,0,0,2) based on c2.
@@ -1575,10 +1584,10 @@ public:
           ysv_ext2 = ysb;
           zsv_ext2 = zsb;
           wsv_ext2 = wsb;
-          dx_ext2 = dx0 - (SQUISH_CONSTANT * 2);
-          dy_ext2 = dy0 - (SQUISH_CONSTANT * 2);
-          dz_ext2 = dz0 - (SQUISH_CONSTANT * 2);
-          dw_ext2 = dw0 - (SQUISH_CONSTANT * 2);
+          dx_ext2 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext2 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+          dz_ext2 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+          dw_ext2 = dw0 - (SQUISH_CONSTANT * (T)2.0);
           if (c2 & 0x01) {
             xsv_ext2 += 2;
             dx_ext2 -= (T)2.0;
@@ -1726,10 +1735,10 @@ public:
         ysv_ext2 = ysb;
         zsv_ext2 = zsb;
         wsv_ext2 = wsb;
-        dx_ext2 = dx0 - (SQUISH_CONSTANT * 2);
-        dy_ext2 = dy0 - (SQUISH_CONSTANT * 2);
-        dz_ext2 = dz0 - (SQUISH_CONSTANT * 2);
-        dw_ext2 = dw0 - (SQUISH_CONSTANT * 2);
+        dx_ext2 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+        dy_ext2 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+        dz_ext2 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+        dw_ext2 = dw0 - (SQUISH_CONSTANT * (T)2.0);
         if ((c2 & 0x01) != 0) {
           xsv_ext2 += 2;
           dx_ext2 -= (T)2.0;
@@ -1778,50 +1787,50 @@ public:
       value += std::pow(std::max((T)2.0 - attn4, (T)0.0), 4) * extrapolate(xsb, ysb, zsb, wsb + 1, dx4, dy4, dz4, dw4);
 
       //Contribution (1,1,0,0)
-      T dx5 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dy5 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dz5 = dz0 - (SQUISH_CONSTANT * 2);
-      T dw5 = dw0 - (SQUISH_CONSTANT * 2);
+      T dx5 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dy5 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dz5 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+      T dw5 = dw0 - (SQUISH_CONSTANT * (T)2.0);
       T attn5 = (dx5 * dx5) + (dy5 * dy5) + (dz5 * dz5) + (dw5 * dw5);
       value += std::pow(std::max((T)2.0 - attn5, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb, dx5, dy5, dz5, dw5);
 
       //Contribution (1,0,1,0)
-      T dx6 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dy6 = dy0 - (SQUISH_CONSTANT * 2);
-      T dz6 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dw6 = dw0 - (SQUISH_CONSTANT * 2);
+      T dx6 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dy6 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+      T dz6 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dw6 = dw0 - (SQUISH_CONSTANT * (T)2.0);
       T attn6 = (dx6 * dx6) + (dy6 * dy6) + (dz6 * dz6) + (dw6 * dw6);
       value += std::pow(std::max((T)2.0 - attn6, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb, dx6, dy6, dz6, dw6);
 
       //Contribution (1,0,0,1)
-      T dx7 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dy7 = dy0 - (SQUISH_CONSTANT * 2);
-      T dz7 = dz0 - (SQUISH_CONSTANT * 2);
-      T dw7 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+      T dx7 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dy7 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+      T dz7 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+      T dw7 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
       T attn7 = (dx7 * dx7) + (dy7 * dy7) + (dz7 * dz7) + (dw7 * dw7);
       value += std::pow(std::max((T)2.0 - attn7, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb + 1, dx7, dy7, dz7, dw7);
 
       // Contribution (0,1,1,0).
-      T dx8 = dx0 - (SQUISH_CONSTANT * 2);
-      T dy8 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dz8 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dw8 = dw0 - (SQUISH_CONSTANT * 2);
+      T dx8 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+      T dy8 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dz8 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dw8 = dw0 - (SQUISH_CONSTANT * (T)2.0);
       T attn8 = (dx8 * dx8) + (dy8 * dy8) + (dz8 * dz8) + (dw8 * dw8);
       value += std::pow(std::max((T)2.0 - attn8, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb, dx8, dy8, dz8, dw8);
 
       // Contribution (0,1,0,1).
-      T dx9 = dx0 - (SQUISH_CONSTANT * 2);
-      T dy9 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dz9 = dz0 - (SQUISH_CONSTANT * 2);
-      T dw9 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+      T dx9 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+      T dy9 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dz9 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+      T dw9 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
       T attn9 = (dx9 * dx9) + (dy9 * dy9) + (dz9 * dz9) + (dw9 * dw9);
       value += std::pow(std::max((T)2.0 - attn9, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb + 1, dx9, dy9, dz9, dw9);
 
       // Contribution (0,0,1,1).
       T dx10 = dx0 - 2 * SQUISH_CONSTANT;
       T dy10 = dy0 - 2 * SQUISH_CONSTANT;
-      T dz10 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-      T dw10 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+      T dz10 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      T dw10 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
       T attn10 = (dx10 * dx10) + (dy10 * dy10) + (dz10 * dz10) + (dw10 * dw10);
       value += std::pow(std::max((T)2.0 - attn10, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb + 1, dx10, dy10, dz10, dw10);
 
@@ -1944,10 +1953,10 @@ public:
           dy_ext0 = dy0 - SQUISH_CONSTANT;
           dz_ext0 = dz0 - SQUISH_CONSTANT;
           dw_ext0 = dw0 - SQUISH_CONSTANT;
-          dx_ext1 = dx0 - (SQUISH_CONSTANT * 2);
-          dy_ext1 = dy0 - (SQUISH_CONSTANT * 2);
-          dz_ext1 = dz0 - (SQUISH_CONSTANT * 2);
-          dw_ext1 = dw0 - (SQUISH_CONSTANT * 2);
+          dx_ext1 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext1 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+          dz_ext1 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+          dw_ext1 = dw0 - (SQUISH_CONSTANT * (T)2.0);
 
           if (c1 & 0x01) {
             xsv_ext0 += 1;
@@ -1976,10 +1985,10 @@ public:
           ysv_ext2 = ysb + 1;
           zsv_ext2 = zsb + 1;
           wsv_ext2 = wsb + 1;
-          dx_ext2 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-          dy_ext2 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-          dz_ext2 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-          dw_ext2 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+          dx_ext2 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext2 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+          dz_ext2 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+          dw_ext2 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
           if (!(c2 & 0x01)) {
             xsv_ext2 -= 2;
             dx_ext2 += (T)2.0;
@@ -2011,16 +2020,16 @@ public:
           if (c & 0x01) {
             xsv_ext0 = xsb + 2;
             xsv_ext1 = xsb + 1;
-            dx_ext0 = dx0 - (T)2.0 - (SQUISH_CONSTANT * 3);
-            dx_ext1 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+            dx_ext0 = dx0 - (T)2.0 - (SQUISH_CONSTANT * (T)3.0);
+            dx_ext1 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
           } else {
             xsv_ext0 = xsv_ext1 = xsb;
-            dx_ext0 = dx_ext1 = dx0 - (SQUISH_CONSTANT * 3);
+            dx_ext0 = dx_ext1 = dx0 - (SQUISH_CONSTANT * (T)3.0);
           }
 
           if (c & 0x02) {
             ysv_ext0 = ysv_ext1 = ysb + 1;
-            dy_ext0 = dy_ext1 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+            dy_ext0 = dy_ext1 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
             if (!(c & 0x01)) {
               ysv_ext0 += 1;
               dy_ext0 -= (T)1.0;
@@ -2030,12 +2039,12 @@ public:
             }
           } else {
             ysv_ext0 = ysv_ext1 = ysb;
-            dy_ext0 = dy_ext1 = dy0 - (SQUISH_CONSTANT * 3);
+            dy_ext0 = dy_ext1 = dy0 - (SQUISH_CONSTANT * (T)3.0);
           }
 
           if (c & 0x04) {
             zsv_ext0 = zsv_ext1 = zsb + 1;
-            dz_ext0 = dz_ext1 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+            dz_ext0 = dz_ext1 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
             if (!(c & 0x03)) {
               zsv_ext0 += 1;
               dz_ext0 -= (T)1.0;
@@ -2045,17 +2054,17 @@ public:
             }
           } else {
             zsv_ext0 = zsv_ext1 = zsb;
-            dz_ext0 = dz_ext1 = dz0 - (SQUISH_CONSTANT * 3);
+            dz_ext0 = dz_ext1 = dz0 - (SQUISH_CONSTANT * (T)3.0);
           }
 
           if (c & 0x08) {
             wsv_ext0 = wsb + 1;
             wsv_ext1 = wsb + 2;
-            dw_ext0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-            dw_ext1 = dw0 - (T)2.0 - (SQUISH_CONSTANT * 3);
+            dw_ext0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+            dw_ext1 = dw0 - (T)2.0 - (SQUISH_CONSTANT * (T)3.0);
           } else {
             wsv_ext0 = wsv_ext1 = wsb;
-            dw_ext0 = dw_ext1 = dw0 - (SQUISH_CONSTANT * 3);
+            dw_ext0 = dw_ext1 = dw0 - (SQUISH_CONSTANT * (T)3.0);
           }
         }
       } else {
@@ -2074,16 +2083,16 @@ public:
         if (c1 & 0x01) {
           xsv_ext0 = xsb + 2;
           xsv_ext1 = xsb + 1;
-          dx_ext0 = dx0 - (T)2.0 - (SQUISH_CONSTANT * 3);
-          dx_ext1 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+          dx_ext0 = dx0 - (T)2.0 - (SQUISH_CONSTANT * (T)3.0);
+          dx_ext1 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
         } else {
           xsv_ext0 = xsv_ext1 = xsb;
-          dx_ext0 = dx_ext1 = dx0 - (SQUISH_CONSTANT * 3);
+          dx_ext0 = dx_ext1 = dx0 - (SQUISH_CONSTANT * (T)3.0);
         }
 
         if (c1 & 0x02) {
           ysv_ext0 = ysv_ext1 = ysb + 1;
-          dy_ext0 = dy_ext1 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+          dy_ext0 = dy_ext1 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
           if (!(c1 & 0x01)) {
             ysv_ext0 += 1;
             dy_ext0 -= (T)1.0;
@@ -2093,12 +2102,12 @@ public:
           }
         } else {
           ysv_ext0 = ysv_ext1 = ysb;
-          dy_ext0 = dy_ext1 = dy0 - (SQUISH_CONSTANT * 3);
+          dy_ext0 = dy_ext1 = dy0 - (SQUISH_CONSTANT * (T)3.0);
         }
 
         if (c1 & 0x04) {
           zsv_ext0 = zsv_ext1 = zsb + 1;
-          dz_ext0 = dz_ext1 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+          dz_ext0 = dz_ext1 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
           if (!(c1 & 0x03)) {
             zsv_ext0 += 1;
             dz_ext0 -= (T)1.0;
@@ -2108,17 +2117,17 @@ public:
           }
         } else {
           zsv_ext0 = zsv_ext1 = zsb;
-          dz_ext0 = dz_ext1 = dz0 - 3 * (SQUISH_CONSTANT * 3);
+          dz_ext0 = dz_ext1 = dz0 - 3 * (SQUISH_CONSTANT * (T)3.0);
         }
 
         if (c1 & 0x08) {
           wsv_ext0 = wsb + 1;
           wsv_ext1 = wsb + 2;
-          dw_ext0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-          dw_ext1 = dw0 - (T)2.0 - (SQUISH_CONSTANT * 3);
+          dw_ext0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+          dw_ext1 = dw0 - (T)2.0 - (SQUISH_CONSTANT * (T)3.0);
         } else {
           wsv_ext0 = wsv_ext1 = wsb;
-          dw_ext0 = dw_ext1 = dw0 - (SQUISH_CONSTANT * 3);
+          dw_ext0 = dw_ext1 = dw0 - (SQUISH_CONSTANT * (T)3.0);
         }
 
         //  One contribution is a permutation of (1,1,1,-1) based on the smaller-sided point.
@@ -2126,10 +2135,10 @@ public:
         ysv_ext2 = ysb + 1;
         zsv_ext2 = zsb + 1;
         wsv_ext2 = wsb + 1;
-        dx_ext2 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        dy_ext2 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        dz_ext2 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        dw_ext2 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+        dx_ext2 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        dy_ext2 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        dz_ext2 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        dw_ext2 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         if (!(c2 & 0x01)) {
           xsv_ext2 -= 2;
           dx_ext2 += (T)2.0;
@@ -2146,25 +2155,25 @@ public:
       }
 
       // Contribution (1,1,1,0).
-      T dx4 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-      T dy4 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-      T dz4 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 3);
-      T dw4 = dw0 - (SQUISH_CONSTANT * 3);
+      T dx4 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+      T dy4 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+      T dz4 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+      T dw4 = dw0 - (SQUISH_CONSTANT * (T)3.0);
       T attn4 = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4) + (dw4 * dw4);
       value += std::pow(std::max((T)2.0 - attn4, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb + 1, wsb, dx4, dy4, dz4, dw4);
 
       //Contribution (1,1,0,1).
       T dx3 = dx4;
       T dy3 = dy4;
-      T dz3 = dz0 - (SQUISH_CONSTANT * 3);
-      T dw3 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 3);
+      T dz3 = dz0 - (SQUISH_CONSTANT * (T)3.0);
+      T dw3 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
       T attn3 = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3) + (dw3 * dw3);
       value += std::pow(std::max((T)2.0 - attn3, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb + 1, dx3, dy3, dz3, dw3);
 
       // Contribution (1,0,1,1).
       {
         T dx2 = dx4;
-        T dy2 = dy0 - (SQUISH_CONSTANT * 3);
+        T dy2 = dy0 - (SQUISH_CONSTANT * (T)3.0);
         T dz2 = dz4;
         T dw2 = dw3;
         T attn2 = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2) + (dw2 * dw2);
@@ -2173,7 +2182,7 @@ public:
 
       // Contribution (0,1,1,1).
       {
-        T dx1 = dx0 - (SQUISH_CONSTANT * 3);
+        T dx1 = dx0 - (SQUISH_CONSTANT * (T)3.0);
         T dz1 = dz4;
         T dy1 = dy4;
         T dw1 = dw3;
@@ -2183,60 +2192,60 @@ public:
 
       // Contribution (1,1,0,0).
       {
-        T dx5 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        T dy5 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        T dz5 = dz0 - (SQUISH_CONSTANT * 2);
-        T dw5 = dw0 - (SQUISH_CONSTANT * 2);
+        T dx5 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy5 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dz5 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw5 = dw0 - (SQUISH_CONSTANT * (T)2.0);
         T attn5 = (dx5 * dx5) + (dy5 * dy5) + (dz5 * dz5) + (dw5 * dw5);
         value += std::pow(std::max((T)2.0 - attn5, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb, dx5, dy5, dz5, dw5);
       }
 
       // Contribution (1,0,1,0).
       {
-        T dx6 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        T dy6 = dy0 - (SQUISH_CONSTANT * 2);
-        T dz6 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        T dw6 = dw0 - (SQUISH_CONSTANT * 2);
+        T dx6 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy6 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+        T dz6 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw6 = dw0 - (SQUISH_CONSTANT * (T)2.0);
         T attn6 = (dx6 * dx6) + (dy6 * dy6) + (dz6 * dz6) + (dw6 * dw6);
         value += std::pow(std::max((T)2.0 - attn6, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb, dx6, dy6, dz6, dw6);
       }
 
       // Contribution (1,0,0,1).
       {
-        T dx7 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        T dy7 = dy0 - (SQUISH_CONSTANT * 2);
-        T dz7 = dz0 - (SQUISH_CONSTANT * 2);
-        T dw7 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+        T dx7 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy7 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+        T dz7 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw7 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T attn7 = (dx7 * dx7) + (dy7 * dy7) + (dz7 * dz7) + (dw7 * dw7);
         value += std::pow(std::max((T)2.0 - attn7, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb + 1, dx7, dy7, dz7, dw7);
       }
 
       // Contribution (0,1,1,0).
       {
-        T dx8 = dx0 - (SQUISH_CONSTANT * 2);
-        T dy8 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        T dz8 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        T dw8 = dw0 - (SQUISH_CONSTANT * 2);
+        T dx8 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy8 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dz8 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw8 = dw0 - (SQUISH_CONSTANT * (T)2.0);
         T attn8 = (dx8 * dx8) + (dy8 * dy8) + (dz8 * dz8) + (dw8 * dw8);
         value += std::pow(std::max((T)2.0 - attn8, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb, dx8, dy8, dz8, dw8);
       }
 
       // Contribution (0,1,0,1).
       {
-        T dx9 = dx0 - (SQUISH_CONSTANT * 2);
-        T dy9 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        T dz9 = dz0 - (SQUISH_CONSTANT * 2);
-        T dw9 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+        T dx9 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy9 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dz9 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw9 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T attn9 = (dx9 * dx9) + (dy9 * dy9) + (dz9 * dz9) + (dw9 * dw9);
         value += std::pow(std::max((T)2.0 - attn9, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb + 1, dx9, dy9, dz9, dw9);
       }
 
       // Contribution (0,0,1,1).
       {
-        T dx10 = dx0 - (SQUISH_CONSTANT * 2);
-        T dy10 = dy0 - (SQUISH_CONSTANT * 2);
-        T dz10 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 2);
-        T dw10 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 2);
+        T dx10 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy10 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+        T dz10 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw10 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T attn10 = (dx10 * dx10) + (dy10 * dy10) + (dz10 * dz10) + (dw10 * dw10);
         value += std::pow(std::max((T)2.0 - attn10, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb + 1, dx10, dy10, dz10, dw10);
       }
@@ -2287,5 +2296,5 @@ const int Noise<4, T>::gradients [] = {
 }
 
 #else
-#pragma message("OpenSimplexNoise.hh included multiple times")
+  #pragma message("OpenSimplexNoise.hh included multiple times")
 #endif
