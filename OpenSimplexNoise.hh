@@ -2,7 +2,7 @@
  * OpenSimplex (Simplectic) Noise in C++
  * by Arthur Tombs
  *
- * Modified 2014-12-05
+ * Modified 2014-12-08
  *
  * This is a derivative work based on OpenSimplex by Kurt Spencer:
  *   https://gist.github.com/KdotJPG/b1270127455a94ac5d19
@@ -122,45 +122,46 @@ protected:
 };
 
 
-template <int N, typename T = double>
+template <int N>
 class Noise : public NoiseBase {
 };
 
 // 2D Implementation of the OpenSimplexNoise generator.
-template <typename T>
-class Noise <2, T> : public NoiseBase {
+template <>
+class Noise <2> : public NoiseBase {
 private:
 
-  static const int gradients [];
+  static const int gradients [16];
 
+  template <typename T>
   inline T extrapolate (long xsb, long ysb, T dx, T dy) const {
     unsigned int index = perm[(perm[xsb & 0xFF] + ysb) & 0xFF] & 0x0E;
     return gradients[index] * dx +
            gradients[index + 1] * dy;
   }
 
+  template <typename T>
+  inline T dextrapolate (long xsb, long ysb, T dx, T dy, T (&v) [2]) const {
+    unsigned int index = perm[(perm[xsb & 0xFF] + ysb) & 0xFF] & 0x0E;
+    return (v[0] = gradients[index]) * dx +
+           (v[1] = gradients[index + 1]) * dy;
+  }
+
 public:
 
 #ifdef OSN_USE_CSTDINT
-  Noise (int64_t seed = 0LL) : NoiseBase (seed) {
-#ifdef OSN_USE_STATIC_ASSERT
-    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
-#endif
-  }
+  Noise (int64_t seed = 0LL) : NoiseBase (seed) {}
 #else
-  Noise (long seed = 0L) : NoiseBase (seed) {
-#ifdef OSN_USE_STATIC_ASSERT
-    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
+  Noise (long seed = 0L) : NoiseBase (seed) {}
 #endif
-  }
-#endif
-  Noise (const int * p) : NoiseBase (p) {
-#ifdef OSN_USE_STATIC_ASSERT
-    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
-#endif
-  }
+  Noise (const int * p) : NoiseBase (p) {}
 
+  template <typename T>
   T eval (T x, T y) const {
+
+#ifdef OSN_USE_STATIC_ASSERT
+    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
+#endif
 
     const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
     const T SQUISH_CONSTANT  = (T)((std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
@@ -291,21 +292,171 @@ public:
     return (value / NORM_CONSTANT);
   }
 
+  template <typename T>
+  void deval (T x, T y, T (&v) [2]) const {
+
+#ifdef OSN_USE_STATIC_ASSERT
+    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
+#endif
+
+    const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
+    const T SQUISH_CONSTANT  = (T)((std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
+    const T NORM_CONSTANT    = (T)47.0;
+
+    long xsb, ysb, xsv_ext, ysv_ext;
+    T dx0, dy0, dx_ext, dy_ext;
+    T xins, yins;
+
+    {
+      // Place input coordinates on a grid.
+      T stretchOffset = (x + y) * STRETCH_CONSTANT;
+      T xs = x + stretchOffset;
+      T ys = y + stretchOffset;
+
+      // Floor to get grid coordinates of rhombus super-cell origin.
+      T xsbd = std::floor(xs);
+      T ysbd = std::floor(ys);
+      xsb = (long)xsbd;
+      ysb = (long)ysbd;
+
+      // Skew out to get actual coordinates of rhombohedron origin.
+      T squishOffset = (xsbd + ysbd) * SQUISH_CONSTANT;
+      T xb = xsbd + squishOffset;
+      T yb = ysbd + squishOffset;
+
+      // Positions relative to origin point.
+      dx0 = x - xb;
+      dy0 = y - yb;
+
+      // Compute grid coordinates relative to rhomboidal origin.
+      xins = xs - xsbd;
+      yins = ys - ysbd;
+    }
+
+    T dv [2] {0.0, 0.0};
+
+    // Contribution (1,0).
+    {
+      T dx1 = dx0 - (T)1.0 - SQUISH_CONSTANT;
+      T dy1 = dy0 - SQUISH_CONSTANT;
+      T attn1 = (dx1 * dx1) + (dy1 * dy1);
+      if (attn1 < 2.0) {
+        attn1 = 2.0 - attn1;
+        T de [2];
+        T ext = dextrapolate(xsb + 1, ysb, dx1, dy1, de);
+        dv[0] += std::pow(attn1, 2) * (std::pow(attn1, 2) * de[0] - ((T)8.0)*attn1*dx1*ext);
+        dv[1] += std::pow(attn1, 2) * (std::pow(attn1, 2) * de[1] - ((T)8.0)*attn1*dy1*ext);
+      }
+    }
+
+    // Contribution (0,1).
+    {
+      T dx2 = dx0 - SQUISH_CONSTANT;
+      T dy2 = dy0 - (T)1.0 - SQUISH_CONSTANT;
+      T attn2 = (dx2 * dx2) + (dy2 * dy2);
+      if (attn2 < 2.0) {
+        attn2 = 2.0 - attn2;
+        T de [2];
+        T ext = dextrapolate(xsb, ysb + 1, dx2, dy2, de);
+        dv[0] += std::pow(attn2, 2) * (std::pow(attn2, 2) * de[0] - ((T)8.0)*attn2*dx2*ext);
+        dv[1] += std::pow(attn2, 2) * (std::pow(attn2, 2) * de[1] - ((T)8.0)*attn2*dy2*ext);
+      }
+    }
+
+    if ((xins + yins) <= (T)1.0) {
+      // Inside the triangle (2-Simplex) at (0,0).
+      T zins = (T)1.0 - (xins + yins);
+      if (zins > xins || zins > yins) {
+        // (0,0) is one of the closest two triangular vertices.
+        if (xins > yins) {
+          xsv_ext = xsb + 1;
+          ysv_ext = ysb - 1;
+          dx_ext = dx0 - (T)1.0;
+          dy_ext = dy0 + (T)1.0;
+        } else {
+          xsv_ext = xsb - 1;
+          ysv_ext = ysb + 1;
+          dx_ext = dx0 + (T)1.0;
+          dy_ext = dy0 - (T)1.0;
+        }
+      } else {
+        // (1,0) and (0,1) are the closest two vertices.
+        xsv_ext = xsb + 1;
+        ysv_ext = ysb + 1;
+        dx_ext = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        dy_ext = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      }
+    } else {
+      // Inside the triangle (2-Simplex) at (1,1).
+      T zins = (T)2.0 - (xins + yins);
+      if (zins < xins || zins < yins) {
+        // (0,0) is one of the closest two triangular vertices.
+        if (xins > yins) {
+          xsv_ext = xsb + 2;
+          ysv_ext = ysb;
+          dx_ext = dx0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext = dy0 - (SQUISH_CONSTANT * (T)2.0);
+        } else {
+          xsv_ext = xsb;
+          ysv_ext = ysb + 2;
+          dx_ext = dx0 - (SQUISH_CONSTANT * (T)2.0);
+          dy_ext = dy0 - (T)2.0 - (SQUISH_CONSTANT * (T)2.0);
+        }
+      } else {
+        // (1,0) and (0,1) are the closest two vertices.
+        xsv_ext = xsb;
+        ysv_ext = ysb;
+        dx_ext = dx0;
+        dy_ext = dy0;
+      }
+      xsb += 1;
+      ysb += 1;
+      dx0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+      dy0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+    }
+
+    // Contribution (0,0) or (1,1).
+    {
+      T attn0 = (dx0 * dx0) + (dy0 * dy0);
+      if (attn0 < 2.0) {
+        attn0 = 2.0 - attn0;
+        T de [2];
+        T ext = dextrapolate(xsb, ysb, dx0, dy0, de);
+        dv[0] += std::pow(attn0, 2) * (std::pow(attn0, 2) * de[0] - ((T)8.0)*attn0*dx0*ext);
+        dv[1] += std::pow(attn0, 2) * (std::pow(attn0, 2) * de[1] - ((T)8.0)*attn0*dy0*ext);
+      }
+    }
+
+    // Extra vertex.
+    {
+      T attn_ext = (dx_ext * dx_ext) + (dy_ext * dy_ext);
+      if (attn_ext < 2.0) {
+        attn_ext = 2.0 - attn_ext;
+        T de [2];
+        T ext = dextrapolate(xsv_ext, ysv_ext, dx_ext, dy_ext, de);
+        dv[0] += std::pow(attn_ext, 2) * (std::pow(attn_ext, 2) * de[0] - ((T)8.0)*attn_ext*dx_ext*ext);
+        dv[1] += std::pow(attn_ext, 2) * (std::pow(attn_ext, 2) * de[1] - ((T)8.0)*attn_ext*dy_ext*ext);
+      }
+    }
+
+    v[0] = dv[0] / NORM_CONSTANT;
+    v[1] = dv[1] / NORM_CONSTANT;
+  }
+
 };
 
 // Array of gradient values for 2D. They approximate the directions to the
 // vertices of a octagon from its center.
 // Gradient set 2014-10-06.
-template <typename T>
-const int Noise<2, T>::gradients [] = {
+const int Noise<2>::gradients [] = {
    5, 2,   2, 5,  -5, 2,  -2, 5,
    5,-2,   2,-5,  -5,-2,  -2,-5
 };
 
 
 // 3D Implementation of the OpenSimplexNoise generator.
-template <typename T>
-class Noise <3, T> : public NoiseBase {
+template <>
+class Noise <3> : public NoiseBase {
 private:
 
   // Array of gradient values for 3D. Values are defined below the class definition.
@@ -315,6 +466,7 @@ private:
   // into the perm array. Pre-calculate and store the indices instead.
   int permGradIndex [256];
 
+  template <typename T>
   inline T extrapolate (long xsb, long ysb, long zsb, T dx, T dy, T dz) const {
     unsigned int index = permGradIndex[(perm[(perm[xsb & 0xFF] + ysb) & 0xFF] + zsb) & 0xFF];
     return gradients[index] * dx +
@@ -330,10 +482,6 @@ public:
   // pair swaps on a base array).
   // Uses a simple 64-bit LCG.
   Noise (int64_t seed = 0LL) : NoiseBase () {
-#ifdef OSN_USE_STATIC_ASSERT
-    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
-#endif
-
     int source [256];
     for (int i = 0; i < 256; ++i) {
       source[i] = i;
@@ -355,10 +503,6 @@ public:
   // Generates a proper permutation (i.e. doesn't merely perform N successive
   // pair swaps on a base array).
   Noise (long seed = 0L) : NoiseBase () {
-#ifdef OSN_USE_STATIC_ASSERT
-    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
-#endif
-
     int source [256];
     for (int i = 0; i < 256; ++i) {
       source[i] = i;
@@ -375,10 +519,6 @@ public:
 #endif
 
   Noise (const int * p) : NoiseBase () {
-#ifdef OSN_USE_STATIC_ASSERT
-    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
-#endif
-
     // Copy the supplied permutation array into this instance.
     for (int i = 0; i < 256; ++i) {
       perm[i] = p[i];
@@ -387,7 +527,12 @@ public:
   }
 
 
+  template <typename T>
   T eval (T x, T y, T z) const {
+
+#ifdef OSN_USE_STATIC_ASSERT
+    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
+#endif
 
     const T STRETCH_CONSTANT = (T)(-1.0 / 6.0); // (1 / sqrt(3 + 1) - 1) / 3
     const T SQUISH_CONSTANT  = (T)(1.0 / 3.0);  // (sqrt(3 + 1) - 1) / 3
@@ -954,8 +1099,7 @@ public:
 // vertices of a rhombicuboctahedron from its center, skewed so that the
 // triangular and square facets can be inscribed in circles of the same radius.
 // New gradient set 2014-10-06.
-template <typename T>
-const int Noise<3, T>::gradients [] = {
+const int Noise<3>::gradients [] = {
   -11, 4, 4,  -4, 11, 4,  -4, 4, 11,   11, 4, 4,   4, 11, 4,   4, 4, 11,
   -11,-4, 4,  -4,-11, 4,  -4,-4, 11,   11,-4, 4,   4,-11, 4,   4,-4, 11,
   -11, 4,-4,  -4, 11,-4,  -4, 4,-11,   11, 4,-4,   4, 11,-4,   4, 4,-11,
@@ -964,13 +1108,14 @@ const int Noise<3, T>::gradients [] = {
 
 
 // 4D Implementation of the OpenSimplexNoise generator.
-template <typename T>
-class Noise <4, T> : public NoiseBase {
+template <>
+class Noise <4> : public NoiseBase {
 private:
 
   // Array of gradient values for 4D. Values are defined below the class definition.
-  static const int gradients [];
+  static const int gradients [256];
 
+  template <typename T>
   inline T extrapolate (long xsb, long ysb, long zsb, long wsb, T dx, T dy, T dz, T dw) const {
     unsigned int index = perm[(perm[(perm[(perm[xsb & 0xFF] + ysb) & 0xFF] + zsb) & 0xFF] + wsb) & 0xFF] & 0xFC;
     return gradients[index] * dx +
@@ -982,26 +1127,19 @@ private:
 public:
 
 #ifdef OSN_USE_CSTDINT
-  Noise (int64_t seed = 0LL) : NoiseBase (seed) {
-#ifdef OSN_USE_STATIC_ASSERT
-    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
-#endif
-}
+  Noise (int64_t seed = 0LL) : NoiseBase (seed) {}
 #else
-  Noise (long seed = 0L) : NoiseBase (seed) {
-#ifdef OSN_USE_STATIC_ASSERT
-    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
+  Noise (long seed = 0L) : NoiseBase (seed) {}
 #endif
-}
-#endif
-  Noise (const int * p) : NoiseBase (p) {
-#ifdef OSN_USE_STATIC_ASSERT
-    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
-#endif
-}
+  Noise (const int * p) : NoiseBase (p) {}
 
 
+  template <typename T>
   T eval (T x, T y, T z, T w) const {
+
+#ifdef OSN_USE_STATIC_ASSERT
+    static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
+#endif
 
     const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(4.0 + 1.0) - 1.0) * 0.25);
     const T SQUISH_CONSTANT  = (T)((std::sqrt(4.0 + 1.0) - 1.0) * 0.25);
@@ -2273,8 +2411,7 @@ public:
 // vertices of a disprismatotesseractihexadecachoron from its center, skewed so that the
 // tetrahedral and cubic facets can be inscribed in spheres of the same radius.
 // Gradient set 2014-10-06.
-template <typename T>
-const int Noise<4, T>::gradients [] = {
+const int Noise<4>::gradients [] = {
    3, 1, 1, 1,   1, 3, 1, 1,   1, 1, 3, 1,   1, 1, 1, 3,
   -3, 1, 1, 1,  -1, 3, 1, 1,  -1, 1, 3, 1,  -1, 1, 1, 3,
    3,-1, 1, 1,   1,-3, 1, 1,   1,-1, 3, 1,   1,-1, 1, 3,
