@@ -69,7 +69,7 @@ int write_image (const char * fname, double * data) {
   for (int y = 0; y < HEIGHT; y++) {
     png_byte row [WIDTH];
     for (int x = 0; x < WIDTH; x++) {
-      png_byte rgbval = (png_byte)std::floor((data[x+y*WIDTH] + 1.0) * 127.5 + 0.5);
+      png_byte rgbval = (png_byte)(std::min((data[x+y*WIDTH] + 1.0) * 128.0, 255.0));
       row[x] = rgbval;
     }
     png_write_row(png_ptr, row);
