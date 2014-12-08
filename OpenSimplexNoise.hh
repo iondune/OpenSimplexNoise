@@ -333,7 +333,7 @@ public:
       yins = ys - ysbd;
     }
 
-    T dv [2] {0.0, 0.0};
+    T dv [2] = {0.0, 0.0};
 
     // Contribution (1,0).
     {
@@ -1885,80 +1885,100 @@ public:
       T dy1 = dy0 - SQUISH_CONSTANT;
       T dz1 = dz0 - SQUISH_CONSTANT;
       T dw1 = dw0 - SQUISH_CONSTANT;
-      T attn1 = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1) + (dw1 * dw1);
-      value += std::pow(std::max((T)2.0 - attn1, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb, dx1, dy1, dz1, dw1);
+      {
+        T attn = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1) + (dw1 * dw1);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb, dx1, dy1, dz1, dw1);
+      }
 
       //Contribution (0,1,0,0)
       T dx2 = dx0 - SQUISH_CONSTANT;
       T dy2 = dy0 - (T)1.0 - SQUISH_CONSTANT;
       T dz2 = dz1;
       T dw2 = dw1;
-      T attn2 = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2) + (dw2 * dw2);
-      value += std::pow(std::max((T)2.0 - attn2, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb, dx2, dy2, dz2, dw2);
+      {
+        T attn = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2) + (dw2 * dw2);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb, dx2, dy2, dz2, dw2);
+      }
 
       //Contribution (0,0,1,0)
-      T dx3 = dx2;
-      T dy3 = dy1;
-      T dz3 = dz0 - (T)1.0 - SQUISH_CONSTANT;
-      T dw3 = dw1;
-      T attn3 = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3) + (dw3 * dw3);
-      value += std::pow(std::max((T)2.0 - attn3, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb, dx3, dy3, dz3, dw3);
+      {
+        T dx3 = dx2;
+        T dy3 = dy1;
+        T dz3 = dz0 - (T)1.0 - SQUISH_CONSTANT;
+        T dw3 = dw1;
+        T attn = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3) + (dw3 * dw3);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb, dx3, dy3, dz3, dw3);
+      }
 
       //Contribution (0,0,0,1)
-      T dx4 = dx2;
-      T dy4 = dy1;
-      T dz4 = dz1;
-      T dw4 = dw0 - (T)1.0 - SQUISH_CONSTANT;
-      T attn4 = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4) + (dw4 * dw4);
-      value += std::pow(std::max((T)2.0 - attn4, (T)0.0), 4) * extrapolate(xsb, ysb, zsb, wsb + 1, dx4, dy4, dz4, dw4);
+      {
+        T dx4 = dx2;
+        T dy4 = dy1;
+        T dz4 = dz1;
+        T dw4 = dw0 - (T)1.0 - SQUISH_CONSTANT;
+        T attn = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4) + (dw4 * dw4);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb, zsb, wsb + 1, dx4, dy4, dz4, dw4);
+      }
 
       //Contribution (1,1,0,0)
-      T dx5 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T dy5 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T dz5 = dz0 - (SQUISH_CONSTANT * (T)2.0);
-      T dw5 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-      T attn5 = (dx5 * dx5) + (dy5 * dy5) + (dz5 * dz5) + (dw5 * dw5);
-      value += std::pow(std::max((T)2.0 - attn5, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb, dx5, dy5, dz5, dw5);
+      {
+        T dx5 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy5 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dz5 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw5 = dw0 - (SQUISH_CONSTANT * (T)2.0);
+        T attn = (dx5 * dx5) + (dy5 * dy5) + (dz5 * dz5) + (dw5 * dw5);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb, dx5, dy5, dz5, dw5);
+      }
 
       //Contribution (1,0,1,0)
-      T dx6 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T dy6 = dy0 - (SQUISH_CONSTANT * (T)2.0);
-      T dz6 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T dw6 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-      T attn6 = (dx6 * dx6) + (dy6 * dy6) + (dz6 * dz6) + (dw6 * dw6);
-      value += std::pow(std::max((T)2.0 - attn6, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb, dx6, dy6, dz6, dw6);
+      {
+        T dx6 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy6 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+        T dz6 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw6 = dw0 - (SQUISH_CONSTANT * (T)2.0);
+        T attn = (dx6 * dx6) + (dy6 * dy6) + (dz6 * dz6) + (dw6 * dw6);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb, dx6, dy6, dz6, dw6);
+      }
 
       //Contribution (1,0,0,1)
-      T dx7 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T dy7 = dy0 - (SQUISH_CONSTANT * (T)2.0);
-      T dz7 = dz0 - (SQUISH_CONSTANT * (T)2.0);
-      T dw7 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T attn7 = (dx7 * dx7) + (dy7 * dy7) + (dz7 * dz7) + (dw7 * dw7);
-      value += std::pow(std::max((T)2.0 - attn7, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb + 1, dx7, dy7, dz7, dw7);
+      {
+        T dx7 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy7 = dy0 - (SQUISH_CONSTANT * (T)2.0);
+        T dz7 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw7 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T attn = (dx7 * dx7) + (dy7 * dy7) + (dz7 * dz7) + (dw7 * dw7);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb + 1, dx7, dy7, dz7, dw7);
+      }
 
-      // Contribution (0,1,1,0).
-      T dx8 = dx0 - (SQUISH_CONSTANT * (T)2.0);
-      T dy8 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T dz8 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T dw8 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-      T attn8 = (dx8 * dx8) + (dy8 * dy8) + (dz8 * dz8) + (dw8 * dw8);
-      value += std::pow(std::max((T)2.0 - attn8, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb, dx8, dy8, dz8, dw8);
+      // Contribution (0,1,1,0)
+      {
+        T dx8 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy8 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dz8 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw8 = dw0 - (SQUISH_CONSTANT * (T)2.0);
+        T attn = (dx8 * dx8) + (dy8 * dy8) + (dz8 * dz8) + (dw8 * dw8);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb, dx8, dy8, dz8, dw8);
+      }
 
-      // Contribution (0,1,0,1).
-      T dx9 = dx0 - (SQUISH_CONSTANT * (T)2.0);
-      T dy9 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T dz9 = dz0 - (SQUISH_CONSTANT * (T)2.0);
-      T dw9 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T attn9 = (dx9 * dx9) + (dy9 * dy9) + (dz9 * dz9) + (dw9 * dw9);
-      value += std::pow(std::max((T)2.0 - attn9, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb + 1, dx9, dy9, dz9, dw9);
+      // Contribution (0,1,0,1)
+      {
+        T dx9 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy9 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dz9 = dz0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw9 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T attn = (dx9 * dx9) + (dy9 * dy9) + (dz9 * dz9) + (dw9 * dw9);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb + 1, dx9, dy9, dz9, dw9);
+      }
 
-      // Contribution (0,0,1,1).
-      T dx10 = dx0 - 2 * SQUISH_CONSTANT;
-      T dy10 = dy0 - 2 * SQUISH_CONSTANT;
-      T dz10 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T dw10 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T attn10 = (dx10 * dx10) + (dy10 * dy10) + (dz10 * dz10) + (dw10 * dw10);
-      value += std::pow(std::max((T)2.0 - attn10, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb + 1, dx10, dy10, dz10, dw10);
+      // Contribution (0,0,1,1)
+      {
+        T dx10 = dx0 - 2 * SQUISH_CONSTANT;
+        T dy10 = dy0 - 2 * SQUISH_CONSTANT;
+        T dz10 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T dw10 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
+        T attn = (dx10 * dx10) + (dy10 * dy10) + (dz10 * dz10) + (dw10 * dw10);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb + 1, dx10, dy10, dz10, dw10);
+      }
 
     } else {
       // Inside the second dispentachoron (rectified 4-simplex).
@@ -2285,16 +2305,20 @@ public:
       T dy4 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
       T dz4 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
       T dw4 = dw0 - (SQUISH_CONSTANT * (T)3.0);
-      T attn4 = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4) + (dw4 * dw4);
-      value += std::pow(std::max((T)2.0 - attn4, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb + 1, wsb, dx4, dy4, dz4, dw4);
+      {
+        T attn = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4) + (dw4 * dw4);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb + 1, wsb, dx4, dy4, dz4, dw4);
+      }
 
       //Contribution (1,1,0,1).
       T dx3 = dx4;
       T dy3 = dy4;
       T dz3 = dz0 - (SQUISH_CONSTANT * (T)3.0);
       T dw3 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
-      T attn3 = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3) + (dw3 * dw3);
-      value += std::pow(std::max((T)2.0 - attn3, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb + 1, dx3, dy3, dz3, dw3);
+      {
+        T attn = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3) + (dw3 * dw3);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb + 1, dx3, dy3, dz3, dw3);
+      }
 
       // Contribution (1,0,1,1).
       {
@@ -2302,8 +2326,8 @@ public:
         T dy2 = dy0 - (SQUISH_CONSTANT * (T)3.0);
         T dz2 = dz4;
         T dw2 = dw3;
-        T attn2 = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2) + (dw2 * dw2);
-        value += std::pow(std::max((T)2.0 - attn2, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb + 1, dx2, dy2, dz2, dw2);
+        T attn = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2) + (dw2 * dw2);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb + 1, dx2, dy2, dz2, dw2);
       }
 
       // Contribution (0,1,1,1).
@@ -2312,8 +2336,8 @@ public:
         T dz1 = dz4;
         T dy1 = dy4;
         T dw1 = dw3;
-        T attn1 = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1) + (dw1 * dw1);
-        value += std::pow(std::max((T)2.0 - attn1, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb + 1, dx1, dy1, dz1, dw1);
+        T attn = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1) + (dw1 * dw1);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb + 1, dx1, dy1, dz1, dw1);
       }
 
       // Contribution (1,1,0,0).
@@ -2322,8 +2346,8 @@ public:
         T dy5 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dz5 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         T dw5 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn5 = (dx5 * dx5) + (dy5 * dy5) + (dz5 * dz5) + (dw5 * dw5);
-        value += std::pow(std::max((T)2.0 - attn5, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb, dx5, dy5, dz5, dw5);
+        T attn = (dx5 * dx5) + (dy5 * dy5) + (dz5 * dz5) + (dw5 * dw5);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb, dx5, dy5, dz5, dw5);
       }
 
       // Contribution (1,0,1,0).
@@ -2332,8 +2356,8 @@ public:
         T dy6 = dy0 - (SQUISH_CONSTANT * (T)2.0);
         T dz6 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dw6 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn6 = (dx6 * dx6) + (dy6 * dy6) + (dz6 * dz6) + (dw6 * dw6);
-        value += std::pow(std::max((T)2.0 - attn6, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb, dx6, dy6, dz6, dw6);
+        T attn = (dx6 * dx6) + (dy6 * dy6) + (dz6 * dz6) + (dw6 * dw6);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb, dx6, dy6, dz6, dw6);
       }
 
       // Contribution (1,0,0,1).
@@ -2342,8 +2366,8 @@ public:
         T dy7 = dy0 - (SQUISH_CONSTANT * (T)2.0);
         T dz7 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         T dw7 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn7 = (dx7 * dx7) + (dy7 * dy7) + (dz7 * dz7) + (dw7 * dw7);
-        value += std::pow(std::max((T)2.0 - attn7, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb + 1, dx7, dy7, dz7, dw7);
+        T attn = (dx7 * dx7) + (dy7 * dy7) + (dz7 * dz7) + (dw7 * dw7);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb + 1, dx7, dy7, dz7, dw7);
       }
 
       // Contribution (0,1,1,0).
@@ -2352,8 +2376,8 @@ public:
         T dy8 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dz8 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dw8 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn8 = (dx8 * dx8) + (dy8 * dy8) + (dz8 * dz8) + (dw8 * dw8);
-        value += std::pow(std::max((T)2.0 - attn8, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb, dx8, dy8, dz8, dw8);
+        T attn = (dx8 * dx8) + (dy8 * dy8) + (dz8 * dz8) + (dw8 * dw8);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb, dx8, dy8, dz8, dw8);
       }
 
       // Contribution (0,1,0,1).
@@ -2362,8 +2386,8 @@ public:
         T dy9 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dz9 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         T dw9 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn9 = (dx9 * dx9) + (dy9 * dy9) + (dz9 * dz9) + (dw9 * dw9);
-        value += std::pow(std::max((T)2.0 - attn9, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb + 1, dx9, dy9, dz9, dw9);
+        T attn = (dx9 * dx9) + (dy9 * dy9) + (dz9 * dz9) + (dw9 * dw9);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb + 1, dx9, dy9, dz9, dw9);
       }
 
       // Contribution (0,0,1,1).
@@ -2372,22 +2396,28 @@ public:
         T dy10 = dy0 - (SQUISH_CONSTANT * (T)2.0);
         T dz10 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dw10 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn10 = (dx10 * dx10) + (dy10 * dy10) + (dz10 * dz10) + (dw10 * dw10);
-        value += std::pow(std::max((T)2.0 - attn10, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb + 1, dx10, dy10, dz10, dw10);
+        T attn = (dx10 * dx10) + (dy10 * dy10) + (dz10 * dz10) + (dw10 * dw10);
+        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb + 1, dx10, dy10, dz10, dw10);
       }
     }
 
     // First extra vertex.
-    T attn_ext0 = (dx_ext0 * dx_ext0) + (dy_ext0 * dy_ext0) + (dz_ext0 * dz_ext0) + (dw_ext0 * dw_ext0);
-    value += std::pow(std::max((T)2.0 - attn_ext0, (T)0.0), 4) * extrapolate(xsv_ext0, ysv_ext0, zsv_ext0, wsv_ext0, dx_ext0, dy_ext0, dz_ext0, dw_ext0);
+    {
+      T attn = (dx_ext0 * dx_ext0) + (dy_ext0 * dy_ext0) + (dz_ext0 * dz_ext0) + (dw_ext0 * dw_ext0);
+      value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsv_ext0, ysv_ext0, zsv_ext0, wsv_ext0, dx_ext0, dy_ext0, dz_ext0, dw_ext0);
+    }
 
     // Second extra vertex.
-    T attn_ext1 = (dx_ext1 * dx_ext1) + (dy_ext1 * dy_ext1) + (dz_ext1 * dz_ext1) + (dw_ext1 * dw_ext1);
-    value += std::pow(std::max((T)2.0 - attn_ext1, (T)0.0), 4) * extrapolate(xsv_ext1, ysv_ext1, zsv_ext1, wsv_ext1, dx_ext1, dy_ext1, dz_ext1, dw_ext1);
+    {
+      T attn = (dx_ext1 * dx_ext1) + (dy_ext1 * dy_ext1) + (dz_ext1 * dz_ext1) + (dw_ext1 * dw_ext1);
+      value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsv_ext1, ysv_ext1, zsv_ext1, wsv_ext1, dx_ext1, dy_ext1, dz_ext1, dw_ext1);
+    }
 
     // Third extra vertex.
-    T attn_ext2 = (dx_ext2 * dx_ext2) + (dy_ext2 * dy_ext2) + (dz_ext2 * dz_ext2) + (dw_ext2 * dw_ext2);
-    value += std::pow(std::max((T)2.0 - attn_ext2, (T)0.0), 4) * extrapolate(xsv_ext2, ysv_ext2, zsv_ext2, wsv_ext2, dx_ext2, dy_ext2, dz_ext2, dw_ext2);
+    {
+      T attn = (dx_ext2 * dx_ext2) + (dy_ext2 * dy_ext2) + (dz_ext2 * dz_ext2) + (dw_ext2 * dw_ext2);
+      value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsv_ext2, ysv_ext2, zsv_ext2, wsv_ext2, dx_ext2, dy_ext2, dz_ext2, dw_ext2);
+    }
 
     return (value / NORM_CONSTANT);
   }

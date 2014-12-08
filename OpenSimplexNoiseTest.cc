@@ -91,7 +91,7 @@ int main (void) {
 
   double * data = new double [WIDTH * HEIGHT];
 
-  OSN::Noise<2, double> noise;
+  OSN::Noise<2> noise;
 
   for (int yi = 0; yi < HEIGHT; ++yi) {
     double y = yi / FEATURE_SIZE;
