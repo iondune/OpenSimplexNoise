@@ -339,28 +339,22 @@ public:
     {
       T dx1 = dx0 - (T)1.0 - SQUISH_CONSTANT;
       T dy1 = dy0 - SQUISH_CONSTANT;
-      T attn1 = (dx1 * dx1) + (dy1 * dy1);
-      if (attn1 < 2.0) {
-        attn1 = 2.0 - attn1;
-        T de [2];
-        T ext = dextrapolate(xsb + 1, ysb, dx1, dy1, de);
-        dv[0] += std::pow(attn1, 2) * (std::pow(attn1, 2) * de[0] - ((T)8.0)*attn1*dx1*ext);
-        dv[1] += std::pow(attn1, 2) * (std::pow(attn1, 2) * de[1] - ((T)8.0)*attn1*dy1*ext);
-      }
+      T attn1 = std::max((T)2.0 - ((dx1 * dx1) + (dy1 * dy1)), (T)0.0);
+      T de [2];
+      T ext = dextrapolate(xsb + 1, ysb, dx1, dy1, de);
+      dv[0] += std::pow(attn1, 2) * (std::pow(attn1, 2) * de[0] - ((T)8.0)*attn1*dx1*ext);
+      dv[1] += std::pow(attn1, 2) * (std::pow(attn1, 2) * de[1] - ((T)8.0)*attn1*dy1*ext);
     }
 
     // Contribution (0,1).
     {
       T dx2 = dx0 - SQUISH_CONSTANT;
       T dy2 = dy0 - (T)1.0 - SQUISH_CONSTANT;
-      T attn2 = (dx2 * dx2) + (dy2 * dy2);
-      if (attn2 < 2.0) {
-        attn2 = 2.0 - attn2;
-        T de [2];
-        T ext = dextrapolate(xsb, ysb + 1, dx2, dy2, de);
-        dv[0] += std::pow(attn2, 2) * (std::pow(attn2, 2) * de[0] - ((T)8.0)*attn2*dx2*ext);
-        dv[1] += std::pow(attn2, 2) * (std::pow(attn2, 2) * de[1] - ((T)8.0)*attn2*dy2*ext);
-      }
+      T attn2 = std::max((T)2.0 - ((dx2 * dx2) + (dy2 * dy2)), (T)0.0);
+      T de [2];
+      T ext = dextrapolate(xsb, ysb + 1, dx2, dy2, de);
+      dv[0] += std::pow(attn2, 2) * (std::pow(attn2, 2) * de[0] - ((T)8.0)*attn2*dx2*ext);
+      dv[1] += std::pow(attn2, 2) * (std::pow(attn2, 2) * de[1] - ((T)8.0)*attn2*dy2*ext);
     }
 
     if ((xins + yins) <= (T)1.0) {
@@ -417,26 +411,20 @@ public:
 
     // Contribution (0,0) or (1,1).
     {
-      T attn0 = (dx0 * dx0) + (dy0 * dy0);
-      if (attn0 < 2.0) {
-        attn0 = 2.0 - attn0;
-        T de [2];
-        T ext = dextrapolate(xsb, ysb, dx0, dy0, de);
-        dv[0] += std::pow(attn0, 2) * (std::pow(attn0, 2) * de[0] - ((T)8.0)*attn0*dx0*ext);
-        dv[1] += std::pow(attn0, 2) * (std::pow(attn0, 2) * de[1] - ((T)8.0)*attn0*dy0*ext);
-      }
+      T attn0 = std::max((T)2.0 - ((dx0 * dx0) + (dy0 * dy0)), (T)0.0);
+      T de [2];
+      T ext = dextrapolate(xsb, ysb, dx0, dy0, de);
+      dv[0] += std::pow(attn0, 2) * (std::pow(attn0, 2) * de[0] - ((T)8.0)*attn0*dx0*ext);
+      dv[1] += std::pow(attn0, 2) * (std::pow(attn0, 2) * de[1] - ((T)8.0)*attn0*dy0*ext);
     }
 
     // Extra vertex.
     {
-      T attn_ext = (dx_ext * dx_ext) + (dy_ext * dy_ext);
-      if (attn_ext < 2.0) {
-        attn_ext = 2.0 - attn_ext;
-        T de [2];
-        T ext = dextrapolate(xsv_ext, ysv_ext, dx_ext, dy_ext, de);
-        dv[0] += std::pow(attn_ext, 2) * (std::pow(attn_ext, 2) * de[0] - ((T)8.0)*attn_ext*dx_ext*ext);
-        dv[1] += std::pow(attn_ext, 2) * (std::pow(attn_ext, 2) * de[1] - ((T)8.0)*attn_ext*dy_ext*ext);
-      }
+      T attn_ext = std::max((T)2.0 - ((dx_ext * dx_ext) + (dy_ext * dy_ext)), (T)0.0);
+      T de [2];
+      T ext = dextrapolate(xsv_ext, ysv_ext, dx_ext, dy_ext, de);
+      dv[0] += std::pow(attn_ext, 2) * (std::pow(attn_ext, 2) * de[0] - ((T)8.0)*attn_ext*dx_ext*ext);
+      dv[1] += std::pow(attn_ext, 2) * (std::pow(attn_ext, 2) * de[1] - ((T)8.0)*attn_ext*dy_ext*ext);
     }
 
     v[0] = dv[0] / NORM_CONSTANT;
