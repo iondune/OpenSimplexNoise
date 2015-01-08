@@ -2,7 +2,7 @@
  * OpenSimplex (Simplectic) Noise in C++
  * by Arthur Tombs
  *
- * Modified 2014-12-08
+ * Modified 2015-01-08
  *
  * This is a derivative work based on OpenSimplex by Kurt Spencer:
  *   https://gist.github.com/KdotJPG/b1270127455a94ac5d19
@@ -51,10 +51,41 @@ namespace OSN {
 
 #ifdef OSN_USE_CSTDINT
   typedef uint_fast8_t OSN_BYTE;
+#ifndef OSN_INT_TYPE
+#define OSN_INT_TYPE int64_t
+#endif
 #else
   typedef unsigned char OSN_BYTE;
+#ifndef OSN_INT_TYPE
+#define OSN_INT_TYPE long
+#endif
 #endif
 
+typedef OSN_INT_TYPE inttype;
+
+namespace {
+
+  // This function seems to be faster than std::pow(x, 4) in all cases
+  template <typename T>
+  inline T pow4 (T x) {
+    x *= x;
+    return x*x;
+  }
+
+  template <typename T>
+  inline T pow2 (T x) {
+    return x*x;
+  }
+
+  template <typename T>
+  inline inttype fastFloori (T x) {
+    inttype ip = (inttype)x;
+#ifndef OSN_ALWAYS_POSITIVE
+    if (x < 0.0) --ip;
+#endif
+    return ip;
+  }
+}
 
 class NoiseBase {
 
@@ -69,8 +100,8 @@ protected:
   // Perform one step of the Linear Congruential Generator algorithm.
   inline static void LCG_STEP (int64_t & x) {
     // Magic constants are attributed to Donald Knuth's MMIX implementation.
-    const int64_t MULTIPLIER = 6364136223846793005LL;
-    const int64_t INCREMENT  = 1442695040888963407LL;
+    static const int64_t MULTIPLIER = 6364136223846793005LL;
+    static const int64_t INCREMENT  = 1442695040888963407LL;
     x = ((x * MULTIPLIER) + INCREMENT);
   }
 
@@ -80,16 +111,14 @@ protected:
   // Uses a simple 64-bit LCG.
   NoiseBase (int64_t seed) {
     int source [256];
-    for (int i = 0; i < 256; ++i) {
-      source[i] = i;
-    }
+    for (int i = 0; i < 256; ++i) { source[i] = i; }
     LCG_STEP(seed);
     LCG_STEP(seed);
     LCG_STEP(seed);
     for (int i = 255; i >= 0; --i) {
       LCG_STEP(seed);
       int r = (int)((seed + 31) % (i + 1));
-      if (r < 0) r += (i + 1);
+      if (r < 0) { r += (i + 1); }
       perm[i] = source[r];
       source[r] = source[i];
     }
@@ -100,9 +129,7 @@ protected:
   // pair swaps on a base array).
   NoiseBase (long seed) {
     int source [256];
-    for (int i = 0; i < 256; ++i) {
-      source[i] = i;
-    }
+    for (int i = 0; i < 256; ++i) { source[i] = i; }
     srand(seed);
     for (int i = 255; i >= 0; --i) {
       int r = (int)(rand() % (i + 1));
@@ -114,9 +141,7 @@ protected:
 
   NoiseBase (const int * p) {
     // Copy the supplied permutation array into this instance
-    for (int i = 0; i < 256; ++i) {
-      perm[i] = p[i];
-    }
+    for (int i = 0; i < 256; ++i) { perm[i] = p[i]; }
   }
 
 };
@@ -134,14 +159,14 @@ private:
   static const int gradients [16];
 
   template <typename T>
-  inline T extrapolate (long xsb, long ysb, T dx, T dy) const {
+  inline T extrapolate (inttype xsb, inttype ysb, T dx, T dy) const {
     unsigned int index = perm[(perm[xsb & 0xFF] + ysb) & 0xFF] & 0x0E;
     return gradients[index] * dx +
            gradients[index + 1] * dy;
   }
 
   template <typename T>
-  inline T dextrapolate (long xsb, long ysb, T dx, T dy, T (&v) [2]) const {
+  inline T extrapolate (inttype xsb, inttype ysb, T dx, T dy, T (&v) [2]) const {
     unsigned int index = perm[(perm[xsb & 0xFF] + ysb) & 0xFF] & 0x0E;
     return (v[0] = gradients[index]) * dx +
            (v[1] = gradients[index + 1]) * dy;
@@ -156,6 +181,7 @@ public:
 #endif
   Noise (const int * p) : NoiseBase (p) {}
 
+
   template <typename T>
   T eval (T x, T y) const {
 
@@ -163,11 +189,11 @@ public:
     static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
 #endif
 
-    const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
-    const T SQUISH_CONSTANT  = (T)((std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
-    const T NORM_CONSTANT    = (T)47.0;
+    static const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
+    static const T SQUISH_CONSTANT  = (T)((std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
+    static const T NORM_CONSTANT    = (T)(1.0 / 47.0);
 
-    long xsb, ysb, xsv_ext, ysv_ext;
+    inttype xsb, ysb, xsv_ext, ysv_ext;
     T dx0, dy0, dx_ext, dy_ext;
     T xins, yins;
 
@@ -181,10 +207,17 @@ public:
       T ys = y + stretchOffset;
 
       // Floor to get grid coordinates of rhombus super-cell origin.
+#ifdef __FAST_MATH__
       T xsbd = std::floor(xs);
       T ysbd = std::floor(ys);
-      xsb = (long)xsbd;
-      ysb = (long)ysbd;
+      xsb = (inttype)xsbd;
+      ysb = (inttype)ysbd;
+#else
+      xsb = fastFloori(xs);
+      ysb = fastFloori(ys);
+      T xsbd = (T)xsb;
+      T ysbd = (T)ysb;
+#endif
 
       // Skew out to get actual coordinates of rhombohedron origin.
       T squishOffset = (xsbd + ysbd) * SQUISH_CONSTANT;
@@ -204,8 +237,7 @@ public:
     {
       T dx1 = dx0 - (T)1.0 - SQUISH_CONSTANT;
       T dy1 = dy0 - SQUISH_CONSTANT;
-      T attn1 = (dx1 * dx1) + (dy1 * dy1);
-      contr_m[0]   = attn1;
+      contr_m[0]   = pow2(dx1) + pow2(dy1);
       contr_ext[0] = extrapolate(xsb + 1, ysb, dx1, dy1);
     }
 
@@ -213,8 +245,7 @@ public:
     {
       T dx2 = dx0 - SQUISH_CONSTANT;
       T dy2 = dy0 - (T)1.0 - SQUISH_CONSTANT;
-      T attn2 = (dx2 * dx2) + (dy2 * dy2);
-      contr_m[1]   = attn2;
+      contr_m[1]   = pow2(dx2) + pow2(dy2);
       contr_ext[1] = extrapolate(xsb, ysb + 1, dx2, dy2);
     }
 
@@ -272,24 +303,22 @@ public:
 
     // Contribution (0,0) or (1,1).
     {
-      T attn0 = (dx0 * dx0) + (dy0 * dy0);
-      contr_m[2]   = attn0;
+      contr_m[2]   = pow2(dx0) + pow2(dy0);
       contr_ext[2] = extrapolate(xsb, ysb, dx0, dy0);
     }
 
     // Extra vertex.
     {
-      T attn_ext = (dx_ext * dx_ext) + (dy_ext * dy_ext);
-      contr_m[3]   = attn_ext;
+      contr_m[3]   = pow2(dx_ext) + pow2(dy_ext);
       contr_ext[3] = extrapolate(xsv_ext, ysv_ext, dx_ext, dy_ext);
     }
 
     T value = 0.0;
     for (int i=0; i<4; ++i) {
-      value += std::pow(std::max((T)2.0 - contr_m[i], (T)0.0), 4) * contr_ext[i];
+      value += pow4(std::max((T)2.0 - contr_m[i], (T)0.0)) * contr_ext[i];
     }
 
-    return (value / NORM_CONSTANT);
+    return (value * NORM_CONSTANT);
   }
 
   template <typename T>
@@ -299,11 +328,11 @@ public:
     static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
 #endif
 
-    const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
-    const T SQUISH_CONSTANT  = (T)((std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
-    const T NORM_CONSTANT    = (T)47.0;
+    static const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
+    static const T SQUISH_CONSTANT  = (T)((std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
+    static const T NORM_CONSTANT    = (T)(1.0 / 47.0);
 
-    long xsb, ysb, xsv_ext, ysv_ext;
+    inttype xsb, ysb, xsv_ext, ysv_ext;
     T dx0, dy0, dx_ext, dy_ext;
     T xins, yins;
 
@@ -314,10 +343,17 @@ public:
       T ys = y + stretchOffset;
 
       // Floor to get grid coordinates of rhombus super-cell origin.
+#ifdef __FAST_MATH__
       T xsbd = std::floor(xs);
       T ysbd = std::floor(ys);
-      xsb = (long)xsbd;
-      ysb = (long)ysbd;
+      xsb = (inttype)xsbd;
+      ysb = (inttype)ysbd;
+#else
+      xsb = fastFloori(xs);
+      ysb = fastFloori(ys);
+      T xsbd = (T)xsb;
+      T ysbd = (T)ysb;
+#endif
 
       // Skew out to get actual coordinates of rhombohedron origin.
       T squishOffset = (xsbd + ysbd) * SQUISH_CONSTANT;
@@ -341,9 +377,9 @@ public:
       T dy1 = dy0 - SQUISH_CONSTANT;
       T attn1 = std::max((T)2.0 - ((dx1 * dx1) + (dy1 * dy1)), (T)0.0);
       T de [2];
-      T ext = dextrapolate(xsb + 1, ysb, dx1, dy1, de);
-      dv[0] += std::pow(attn1, 2) * (std::pow(attn1, 2) * de[0] - ((T)8.0)*attn1*dx1*ext);
-      dv[1] += std::pow(attn1, 2) * (std::pow(attn1, 2) * de[1] - ((T)8.0)*attn1*dy1*ext);
+      T ext = extrapolate(xsb + 1, ysb, dx1, dy1, de);
+      dv[0] += pow2(attn1) * (pow2(attn1) * de[0] - ((T)8.0)*attn1*dx1*ext);
+      dv[1] += pow2(attn1) * (pow2(attn1) * de[1] - ((T)8.0)*attn1*dy1*ext);
     }
 
     // Contribution (0,1).
@@ -352,9 +388,9 @@ public:
       T dy2 = dy0 - (T)1.0 - SQUISH_CONSTANT;
       T attn2 = std::max((T)2.0 - ((dx2 * dx2) + (dy2 * dy2)), (T)0.0);
       T de [2];
-      T ext = dextrapolate(xsb, ysb + 1, dx2, dy2, de);
-      dv[0] += std::pow(attn2, 2) * (std::pow(attn2, 2) * de[0] - ((T)8.0)*attn2*dx2*ext);
-      dv[1] += std::pow(attn2, 2) * (std::pow(attn2, 2) * de[1] - ((T)8.0)*attn2*dy2*ext);
+      T ext = extrapolate(xsb, ysb + 1, dx2, dy2, de);
+      dv[0] += pow2(attn2) * (pow2(attn2) * de[0] - ((T)8.0)*attn2*dx2*ext);
+      dv[1] += pow2(attn2) * (pow2(attn2) * de[1] - ((T)8.0)*attn2*dy2*ext);
     }
 
     if ((xins + yins) <= (T)1.0) {
@@ -411,24 +447,24 @@ public:
 
     // Contribution (0,0) or (1,1).
     {
-      T attn0 = std::max((T)2.0 - ((dx0 * dx0) + (dy0 * dy0)), (T)0.0);
+      T attn = std::max((T)2.0 - ((dx0 * dx0) + (dy0 * dy0)), (T)0.0);
       T de [2];
-      T ext = dextrapolate(xsb, ysb, dx0, dy0, de);
-      dv[0] += std::pow(attn0, 2) * (std::pow(attn0, 2) * de[0] - ((T)8.0)*attn0*dx0*ext);
-      dv[1] += std::pow(attn0, 2) * (std::pow(attn0, 2) * de[1] - ((T)8.0)*attn0*dy0*ext);
+      T ext = extrapolate(xsb, ysb, dx0, dy0, de);
+      dv[0] += pow2(attn) * (pow2(attn) * de[0] - ((T)8.0)*attn*dx0*ext);
+      dv[1] += pow2(attn) * (pow2(attn) * de[1] - ((T)8.0)*attn*dy0*ext);
     }
 
     // Extra vertex.
     {
-      T attn_ext = std::max((T)2.0 - ((dx_ext * dx_ext) + (dy_ext * dy_ext)), (T)0.0);
+      T attn = std::max((T)2.0 - ((dx_ext * dx_ext) + (dy_ext * dy_ext)), (T)0.0);
       T de [2];
-      T ext = dextrapolate(xsv_ext, ysv_ext, dx_ext, dy_ext, de);
-      dv[0] += std::pow(attn_ext, 2) * (std::pow(attn_ext, 2) * de[0] - ((T)8.0)*attn_ext*dx_ext*ext);
-      dv[1] += std::pow(attn_ext, 2) * (std::pow(attn_ext, 2) * de[1] - ((T)8.0)*attn_ext*dy_ext*ext);
+      T ext = extrapolate(xsv_ext, ysv_ext, dx_ext, dy_ext, de);
+      dv[0] += pow2(attn) * (pow2(attn) * de[0] - ((T)8.0)*attn*dx_ext*ext);
+      dv[1] += pow2(attn) * (pow2(attn) * de[1] - ((T)8.0)*attn*dy_ext*ext);
     }
 
-    v[0] = dv[0] / NORM_CONSTANT;
-    v[1] = dv[1] / NORM_CONSTANT;
+    v[0] = dv[0] * NORM_CONSTANT;
+    v[1] = dv[1] * NORM_CONSTANT;
   }
 
 };
@@ -455,11 +491,19 @@ private:
   int permGradIndex [256];
 
   template <typename T>
-  inline T extrapolate (long xsb, long ysb, long zsb, T dx, T dy, T dz) const {
+  inline T extrapolate (inttype xsb, inttype ysb, inttype zsb, T dx, T dy, T dz) const {
     unsigned int index = permGradIndex[(perm[(perm[xsb & 0xFF] + ysb) & 0xFF] + zsb) & 0xFF];
     return gradients[index] * dx +
            gradients[index + 1] * dy +
            gradients[index + 2] * dz;
+  }
+
+  template <typename T>
+  inline T extrapolate (inttype xsb, inttype ysb, inttype zsb, T dx, T dy, T dz, T (&de) [3]) const {
+    unsigned int index = permGradIndex[(perm[(perm[xsb & 0xFF] + ysb) & 0xFF] + zsb) & 0xFF];
+    return (de[0] = gradients[index]) * dx +
+           (de[1] = gradients[index + 1]) * dy +
+           (de[2] = gradients[index + 2]) * dz;
   }
 
 public:
@@ -471,16 +515,14 @@ public:
   // Uses a simple 64-bit LCG.
   Noise (int64_t seed = 0LL) : NoiseBase () {
     int source [256];
-    for (int i = 0; i < 256; ++i) {
-      source[i] = i;
-    }
+    for (int i = 0; i < 256; ++i) { source[i] = i; }
     LCG_STEP(seed);
     LCG_STEP(seed);
     LCG_STEP(seed);
     for (int i = 255; i >= 0; --i) {
       LCG_STEP(seed);
       int r = (int)((seed + 31) % (i + 1));
-      if (r < 0) r += (i + 1);
+      if (r < 0) { r += (i + 1); }
       perm[i] = source[r];
       permGradIndex[i] = (int)((perm[i] % (72 / 3)) * 3);
       source[r] = source[i];
@@ -492,9 +534,7 @@ public:
   // pair swaps on a base array).
   Noise (long seed = 0L) : NoiseBase () {
     int source [256];
-    for (int i = 0; i < 256; ++i) {
-      source[i] = i;
-    }
+    for (int i = 0; i < 256; ++i) { source[i] = i; }
     srand(seed);
     for (int i = 255; i >= 0; --i) {
       int r = (int)(rand() % (i + 1));
@@ -522,13 +562,16 @@ public:
     static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
 #endif
 
-    const T STRETCH_CONSTANT = (T)(-1.0 / 6.0); // (1 / sqrt(3 + 1) - 1) / 3
-    const T SQUISH_CONSTANT  = (T)(1.0 / 3.0);  // (sqrt(3 + 1) - 1) / 3
-    const T NORM_CONSTANT    = (T)103.0;
+    static const T STRETCH_CONSTANT = (T)(-1.0 / 6.0); // (1 / sqrt(3 + 1) - 1) / 3
+    static const T SQUISH_CONSTANT  = (T)(1.0 / 3.0);  // (sqrt(3 + 1) - 1) / 3
+    static const T NORM_CONSTANT    = (T)(1.0 / 103.0);
 
-    long xsb, ysb, zsb;
+    inttype xsb, ysb, zsb;
     T dx0, dy0, dz0;
     T xins, yins, zins;
+
+    // Parameters for the individual contributions
+    T contr_m [9], contr_ext [9];
 
     {
       // Place input coordinates on simplectic lattice.
@@ -539,12 +582,21 @@ public:
 
       // Floor to get simplectic lattice coordinates of rhombohedron
       // (stretched cube) super-cell.
+#ifdef __FAST_MATH__
       T xsbd = std::floor(xs);
       T ysbd = std::floor(ys);
       T zsbd = std::floor(zs);
-      xsb = (long)xsbd;
-      ysb = (long)ysbd;
-      zsb = (long)zsbd;
+      xsb = (inttype)xsbd;
+      ysb = (inttype)ysbd;
+      zsb = (inttype)zsbd;
+#else
+      xsb = fastFloori(xs);
+      ysb = fastFloori(ys);
+      zsb = fastFloori(zs);
+      T xsbd = (T)xsb;
+      T ysbd = (T)ysb;
+      T zsbd = (T)zsb;
+#endif
 
       // Skew out to get actual coordinates of rhombohedron origin.
       T squishOffset = (xsbd + ysbd + zsbd) * SQUISH_CONSTANT;
@@ -564,12 +616,10 @@ public:
     }
 
     // These are given values inside the next block, and used afterwards.
-    long xsv_ext0, ysv_ext0, zsv_ext0;
-    long xsv_ext1, ysv_ext1, zsv_ext1;
+    inttype xsv_ext0, ysv_ext0, zsv_ext0;
+    inttype xsv_ext1, ysv_ext1, zsv_ext1;
     T dx_ext0, dy_ext0, dz_ext0;
     T dx_ext1, dy_ext1, dz_ext1;
-
-    T value = 0.0;
 
     // Sum together to get a value that determines which cell we are in.
     T inSum = xins + yins + zins;
@@ -686,14 +736,14 @@ public:
 
           // The other extra point is based on the omitted axis.
           OSN_BYTE c = aPoint | bPoint;
-          if ((c & 0x01) == 0) {
+          if (!(c & 0x01)) {
             xsv_ext1 = xsb - 1;
             ysv_ext1 = ysb + 1;
             zsv_ext1 = zsb + 1;
             dx_ext1 = dx0 + (T)1.0 - SQUISH_CONSTANT;
             dy_ext1 = dy0 - (T)1.0 - SQUISH_CONSTANT;
             dz_ext1 = dz0 - (T)1.0 - SQUISH_CONSTANT;
-          } else if ((c & 0x02) == 0) {
+          } else if (!(c & 0x02)) {
             xsv_ext1 = xsb + 1;
             ysv_ext1 = ysb - 1;
             zsv_ext1 = zsb + 1;
@@ -722,14 +772,14 @@ public:
         }
 
         // One contribution is a permutation of (1,1,-1).
-        if ((c1 & 0x01) == 0) {
+        if (!(c1 & 0x01)) {
           xsv_ext0 = xsb - 1;
           ysv_ext0 = ysb + 1;
           zsv_ext0 = zsb + 1;
           dx_ext0 = dx0 + (T)1.0 - SQUISH_CONSTANT;
           dy_ext0 = dy0 - (T)1.0 - SQUISH_CONSTANT;
           dz_ext0 = dz0 - (T)1.0 - SQUISH_CONSTANT;
-        } else if ((c1 & 0x02) == 0) {
+        } else if (!(c1 & 0x02)) {
           xsv_ext0 = xsb + 1;
           ysv_ext0 = ysb - 1;
           zsv_ext0 = zsb + 1;
@@ -770,47 +820,49 @@ public:
         }
       }
 
+      contr_m[0] = contr_ext[0] = 0.0;
+
       // Contribution (0,0,1).
       T dx1 = dx0 - (T)1.0 - SQUISH_CONSTANT;
       T dy1 = dy0 - SQUISH_CONSTANT;
       T dz1 = dz0 - SQUISH_CONSTANT;
-      T attn1 = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1);
-      value = std::pow(std::max((T)2.0 - attn1, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, dx1, dy1, dz1);
+      contr_m[1] = pow2(dx1) + pow2(dy1) + pow2(dz1);
+      contr_ext[1] = extrapolate(xsb + 1, ysb, zsb, dx1, dy1, dz1);
 
       // Contribution (0,1,0).
       T dx2 = dx0 - SQUISH_CONSTANT;
       T dy2 = dy0 - (T)1.0 - SQUISH_CONSTANT;
       T dz2 = dz1;
-      T attn2 = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2);
-      value += std::pow(std::max((T)2.0 - attn2, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, dx2, dy2, dz2);
+      contr_m[2] = pow2(dx2) + pow2(dy2) + pow2(dz2);
+      contr_ext[2] = extrapolate(xsb, ysb + 1, zsb, dx2, dy2, dz2);
 
       // Contribution (1,0,0).
       T dx3 = dx2;
       T dy3 = dy1;
       T dz3 = dz0 - (T)1.0 - SQUISH_CONSTANT;
-      T attn3 = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3);
-      value += std::pow(std::max((T)2.0 - attn3, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, dx3, dy3, dz3);
+      contr_m[3] = pow2(dx3) + pow2(dy3) + pow2(dz3);
+      contr_ext[3] = extrapolate(xsb, ysb, zsb + 1, dx3, dy3, dz3);
 
       // Contribution (1,1,0).
       T dx4 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
       T dy4 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
       T dz4 = dz0 - (SQUISH_CONSTANT * (T)2.0);
-      T attn4 = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4);
-      value += std::pow(std::max((T)2.0 - attn4, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb + 0, dx4, dy4, dz4);
+      contr_m[4] = pow2(dx4) + pow2(dy4) + pow2(dz4);
+      contr_ext[4] = extrapolate(xsb + 1, ysb + 1, zsb, dx4, dy4, dz4);
 
       // Contribution (1,0,1).
       T dx5 = dx4;
       T dy5 = dy0 - (SQUISH_CONSTANT * (T)2.0);
       T dz5 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T attn5 = (dx5 * dx5) + (dy5 * dy5) + (dz5 * dz5);
-      value += std::pow(std::max((T)2.0 - attn5, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, dx5, dy5, dz5);
+      contr_m[5] = pow2(dx5) + pow2(dy5) + pow2(dz5);
+      contr_ext[5] = extrapolate(xsb + 1, ysb, zsb + 1, dx5, dy5, dz5);
 
       // Contribution (0,1,1).
       T dx6 = dx0 - (SQUISH_CONSTANT * (T)2.0);
       T dy6 = dy4;
       T dz6 = dz5;
-      T attn6 = (dx6 * dx6) + (dy6 * dy6) + (dz6 * dz6);
-      value += std::pow(std::max((T)2.0 - attn6, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, dx6, dy6, dz6);
+      contr_m[6] = pow2(dx6) + pow2(dy6) + pow2(dz6);
+      contr_ext[6] = extrapolate(xsb, ysb + 1, zsb + 1, dx6, dy6, dz6);
 
     } else if (inSum <= (T)1.0) {
       // The point is inside the tetrahedron (3-Simplex) at (0,0,0)
@@ -912,29 +964,34 @@ public:
       }
 
       // Contribution (0,0,0)
-      T attn0 = (dx0 * dx0) + (dy0 * dy0) + (dz0 * dz0);
-      value = std::pow(std::max((T)2.0 - attn0, (T)0.0), 4) * extrapolate(xsb, ysb, zsb, dx0, dy0, dz0);
+      {
+        contr_m[0] = pow2(dx0) + pow2(dy0) + pow2(dz0);
+        contr_ext[0] = extrapolate(xsb, ysb, zsb, dx0, dy0, dz0);
+      }
 
       // Contribution (0,0,1)
       T dx1 = dx0 - (T)1.0 - SQUISH_CONSTANT;
       T dy1 = dy0 - SQUISH_CONSTANT;
       T dz1 = dz0 - SQUISH_CONSTANT;
-      T attn1 = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1);
-      value += std::pow(std::max((T)2.0 - attn1, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, dx1, dy1, dz1);
+      contr_m[1] = pow2(dx1) + pow2(dy1) + pow2(dz1);
+      contr_ext[1] = extrapolate(xsb + 1, ysb, zsb, dx1, dy1, dz1);
 
       // Contribution (0,1,0)
       T dx2 = dx0 - SQUISH_CONSTANT;
       T dy2 = dy0 - (T)1.0 - SQUISH_CONSTANT;
       T dz2 = dz1;
-      T attn2 = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2);
-      value += std::pow(std::max((T)2.0 - attn2, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, dx2, dy2, dz2);
+      contr_m[2] = pow2(dx2) + pow2(dy2) + pow2(dz2);
+      contr_ext[2] = extrapolate(xsb, ysb + 1, zsb, dx2, dy2, dz2);
 
       // Contribution (1,0,0)
       T dx3 = dx2;
       T dy3 = dy1;
       T dz3 = dz0 - (T)1.0 - SQUISH_CONSTANT;
-      T attn3 = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3);
-      value += std::pow(std::max((T)2.0 - attn3, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, dx3, dy3, dz3);
+      contr_m[3] = pow2(dx3) + pow2(dy3) + pow2(dz3);
+      contr_ext[3] = extrapolate(xsb, ysb, zsb + 1, dx3, dy3, dz3);
+
+      contr_m[4] = contr_m[5] = contr_m[6] = 0.0;
+      contr_ext[4] = contr_ext[5] = contr_ext[6] = 0.0;
 
     } else {
       // The point is inside the tetrahedron (3-Simplex) at (1,1,1)
@@ -1040,44 +1097,53 @@ public:
       T dx3 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
       T dy3 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
       T dz3 = dz0 - (SQUISH_CONSTANT * (T)2.0);
-      T attn3 = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3);
-      value = std::pow(std::max((T)2.0 - attn3, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, dx3, dy3, dz3);
+      contr_m[3] = pow2(dx3) + pow2(dy3) + pow2(dz3);
+      contr_ext[3] = extrapolate(xsb + 1, ysb + 1, zsb, dx3, dy3, dz3);
 
       // Contribution (1,0,1)
       T dx2 = dx3;
       T dy2 = dy0 - (SQUISH_CONSTANT * (T)2.0);
       T dz2 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-      T attn2 = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2);
-      value += std::pow(std::max((T)2.0 - attn2, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, dx2, dy2, dz2);
+      contr_m[2] = pow2(dx2) + pow2(dy2) + pow2(dz2);
+      contr_ext[2] = extrapolate(xsb + 1, ysb, zsb + 1, dx2, dy2, dz2);
 
       // Contribution (0,1,1)
-      T dx1 = dx0 - (SQUISH_CONSTANT * (T)2.0);
-      T dy1 = dy3;
-      T dz1 = dz2;
-      T attn1 = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1);
-      value += std::pow(std::max((T)2.0 - attn1, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, dx1, dy1, dz1);
+      {
+        T dx1 = dx0 - (SQUISH_CONSTANT * (T)2.0);
+        T dy1 = dy3;
+        T dz1 = dz2;
+        contr_m[1] = pow2(dx1) + pow2(dy1) + pow2(dz1);
+        contr_ext[1] = extrapolate(xsb, ysb + 1, zsb + 1, dx1, dy1, dz1);
+      }
 
       // Contribution (1,1,1)
-      dx0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
-      dy0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
-      dz0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
-      T attn0 = (dx0 * dx0) + (dy0 * dy0) + (dz0 * dz0);
-      value += std::pow(std::max((T)2.0 - attn0, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb + 1, dx0, dy0, dz0);
+      {
+        dx0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+        dy0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+        dz0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
+        contr_m[0] = pow2(dx0) + pow2(dy0) + pow2(dz0);
+        contr_ext[0] = extrapolate(xsb + 1, ysb + 1, zsb + 1, dx0, dy0, dz0);
+      }
+
+      contr_m[4] = contr_m[5] = contr_m[6] = 0.0;
+      contr_ext[4] = contr_ext[5] = contr_ext[6] = 0.0;
+
     }
 
     // First extra vertex.
-    {
-      T attn_ext0 = (dx_ext0 * dx_ext0) + (dy_ext0 * dy_ext0) + (dz_ext0 * dz_ext0);
-      value += std::pow(std::max((T)2.0 - attn_ext0, (T)0.0), 4) * extrapolate(xsv_ext0, ysv_ext0, zsv_ext0, dx_ext0, dy_ext0, dz_ext0);
-    }
+    contr_m[7] = pow2(dx_ext0) + pow2(dy_ext0) + pow2(dz_ext0);
+    contr_ext[7] = extrapolate(xsv_ext0, ysv_ext0, zsv_ext0, dx_ext0, dy_ext0, dz_ext0);
 
     // Second extra vertex.
-    {
-      T attn_ext1 = (dx_ext1 * dx_ext1) + (dy_ext1 * dy_ext1) + (dz_ext1 * dz_ext1);
-      value += std::pow(std::max((T)2.0 - attn_ext1, (T)0.0), 4) * extrapolate(xsv_ext1, ysv_ext1, zsv_ext1, dx_ext1, dy_ext1, dz_ext1);
+    contr_m[8] = pow2(dx_ext1) + pow2(dy_ext1) + pow2(dz_ext1);
+    contr_ext[8] = extrapolate(xsv_ext1, ysv_ext1, zsv_ext1, dx_ext1, dy_ext1, dz_ext1);
+
+    T value = 0.0;
+    for (int i=0; i<9; ++i) {
+      value += pow4(std::max((T)2.0 - contr_m[i], (T)0.0)) * contr_ext[i];
     }
 
-    return (value / NORM_CONSTANT);
+    return (value * NORM_CONSTANT);
   }
 
 };
@@ -1104,7 +1170,7 @@ private:
   static const int gradients [256];
 
   template <typename T>
-  inline T extrapolate (long xsb, long ysb, long zsb, long wsb, T dx, T dy, T dz, T dw) const {
+  inline T extrapolate (inttype xsb, inttype ysb, inttype zsb, inttype wsb, T dx, T dy, T dz, T dw) const {
     unsigned int index = perm[(perm[(perm[(perm[xsb & 0xFF] + ysb) & 0xFF] + zsb) & 0xFF] + wsb) & 0xFF] & 0xFC;
     return gradients[index] * dx +
            gradients[index + 1] * dy +
@@ -1129,12 +1195,12 @@ public:
     static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
 #endif
 
-    const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(4.0 + 1.0) - 1.0) * 0.25);
-    const T SQUISH_CONSTANT  = (T)((std::sqrt(4.0 + 1.0) - 1.0) * 0.25);
-    const T NORM_CONSTANT    = (T)30.0;
+    static const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(4.0 + 1.0) - 1.0) * 0.25);
+    static const T SQUISH_CONSTANT  = (T)((std::sqrt(4.0 + 1.0) - 1.0) * 0.25);
+    static const T NORM_CONSTANT    = (T)(1.0 / 30.0);
 
     T dx0, dy0, dz0, dw0;
-    long xsb, ysb, zsb, wsb;
+    inttype xsb, ysb, zsb, wsb;
     T xins, yins, zins, wins;
 
     {
@@ -1146,14 +1212,25 @@ public:
       T ws = w + stretchOffset;
 
       // Floor to get simplectic honeycomb coordinates of rhombo-hypercube origin.
+#ifdef __FAST_MATH__
       T xsbd = std::floor(xs);
       T ysbd = std::floor(ys);
       T zsbd = std::floor(zs);
       T wsbd = std::floor(ws);
-      xsb = (long)xsbd;
-      ysb = (long)ysbd;
-      zsb = (long)zsbd;
-      wsb = (long)wsbd;
+      xsb = (inttype)xsbd;
+      ysb = (inttype)ysbd;
+      zsb = (inttype)zsbd;
+      wsb = (inttype)wsbd;
+#else
+      xsb = fastFloori(xs);
+      ysb = fastFloori(ys);
+      zsb = fastFloori(zs);
+      wsb = fastFloori(ws);
+      T xsbd = (T)xsb;
+      T ysbd = (T)ysb;
+      T zsbd = (T)zsb;
+      T wsbd = (T)wsb;
+#endif
 
       // Skew out to get actual coordinates of stretched rhombo-hypercube origin.
       T squishOffset = (xsbd + ysbd + zsbd + wsbd) * SQUISH_CONSTANT;
@@ -1176,9 +1253,9 @@ public:
     }
 
     // These are given values inside the next block, and used afterwards.
-    long xsv_ext0, ysv_ext0, zsv_ext0, wsv_ext0;
-    long xsv_ext1, ysv_ext1, zsv_ext1, wsv_ext1;
-    long xsv_ext2, ysv_ext2, zsv_ext2, wsv_ext2;
+    inttype xsv_ext0, ysv_ext0, zsv_ext0, wsv_ext0;
+    inttype xsv_ext1, ysv_ext1, zsv_ext1, wsv_ext1;
+    inttype xsv_ext2, ysv_ext2, zsv_ext2, wsv_ext2;
     T dx_ext0, dy_ext0, dz_ext0, dw_ext0;
     T dx_ext1, dy_ext1, dz_ext1, dw_ext1;
     T dx_ext2, dy_ext2, dz_ext2, dw_ext2;
@@ -1334,40 +1411,50 @@ public:
       }
 
       // Contribution (0,0,0,0).
-      T attn0 = (dx0 * dx0) + (dy0 * dy0) + (dz0 * dz0) + (dw0 * dw0);
-      value = std::pow(std::max((T)2.0 - attn0, (T)0.0), 4) * extrapolate(xsb, ysb, zsb, wsb, dx0, dy0, dz0, dw0);
+      {
+        T attn = pow2(dx0) + pow2(dy0) + pow2(dz0) + pow2(dw0);
+        value = pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb, zsb, wsb, dx0, dy0, dz0, dw0);
+      }
 
       // Contribution (1,0,0,0).
       T dx1 = dx0 - (T)1.0 - SQUISH_CONSTANT;
       T dy1 = dy0 - SQUISH_CONSTANT;
       T dz1 = dz0 - SQUISH_CONSTANT;
       T dw1 = dw0 - SQUISH_CONSTANT;
-      T attn1 = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1) + (dw1 * dw1);
-      value += std::pow(std::max((T)2.0 - attn1, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb, dx1, dy1, dz1, dw1);
+      {
+        T attn = pow2(dx1) + pow2(dy1) + pow2(dz1) + pow2(dw1);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb, zsb, wsb, dx1, dy1, dz1, dw1);
+      }
 
       // Contribution (0,1,0,0).
       T dx2 = dx0 - SQUISH_CONSTANT;
       T dy2 = dy0 - (T)1.0 - SQUISH_CONSTANT;
       T dz2 = dz1;
       T dw2 = dw1;
-      T attn2 = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2) + (dw2 * dw2);
-      value += std::pow(std::max((T)2.0 - attn2, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb, dx2, dy2, dz2, dw2);
+      {
+        T attn = pow2(dx2) + pow2(dy2) + pow2(dz2) + pow2(dw2);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb + 1, zsb, wsb, dx2, dy2, dz2, dw2);
+      }
 
       // Contribution (0,0,1,0).
-      T dx3 = dx2;
-      T dy3 = dy1;
-      T dz3 = dz0 - (T)1.0 - SQUISH_CONSTANT;
-      T dw3 = dw1;
-      T attn3 = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3) + (dw3 * dw3);
-      value += std::pow(std::max((T)2.0 - attn3, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb, dx3, dy3, dz3, dw3);
+      {
+        T dx3 = dx2;
+        T dy3 = dy1;
+        T dz3 = dz0 - (T)1.0 - SQUISH_CONSTANT;
+        T dw3 = dw1;
+        T attn = pow2(dx3) + pow2(dy3) + pow2(dz3) + pow2(dw3);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb, zsb + 1, wsb, dx3, dy3, dz3, dw3);
+      }
 
       // Contribution (0,0,0,1).
-      T dx4 = dx2;
-      T dy4 = dy1;
-      T dz4 = dz1;
-      T dw4 = dw0 - (T)1.0 - SQUISH_CONSTANT;
-      T attn4 = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4) + (dw4 * dw4);
-      value += std::pow(std::max((T)2.0 - attn4, (T)0.0), 4) * extrapolate(xsb, ysb, zsb, wsb + 1, dx4, dy4, dz4, dw4);
+      {
+        T dx4 = dx2;
+        T dy4 = dy1;
+        T dz4 = dz1;
+        T dw4 = dw0 - (T)1.0 - SQUISH_CONSTANT;
+        T attn = pow2(dx4) + pow2(dy4) + pow2(dz4) + pow2(dw4);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb, zsb, wsb + 1, dx4, dy4, dz4, dw4);
+      }
 
     } else if (inSum >= 3.0) {
       // Inside the pentachoron (4-simplex) at (1,1,1,1).
@@ -1522,40 +1609,50 @@ public:
       T dy4 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
       T dz4 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
       T dw4 = dw0 - (SQUISH_CONSTANT * (T)3.0);
-      T attn4 = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4) + (dw4 * dw4);
-      value = std::pow(std::max((T)2.0 - attn4, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb + 1, wsb, dx4, dy4, dz4, dw4);
+      {
+        T attn = pow2(dx4) + pow2(dy4) + pow2(dz4) + pow2(dw4);
+        value = pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb + 1, zsb + 1, wsb, dx4, dy4, dz4, dw4);
+      }
 
       // Contribution (1,1,0,1).
       T dx3 = dx4;
       T dy3 = dy4;
       T dz3 = dz0 - (SQUISH_CONSTANT * (T)3.0);
       T dw3 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
-      T attn3 = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3) + (dw3 * dw3);
-      value += std::pow(std::max((T)2.0 - attn3, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb + 1, dx3, dy3, dz3, dw3);
+      {
+        T attn = pow2(dx3) + pow2(dy3) + pow2(dz3) + pow2(dw3);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb + 1, zsb, wsb + 1, dx3, dy3, dz3, dw3);
+      }
 
       // Contribution (1,0,1,1).
       T dx2 = dx4;
       T dy2 = dy0 - (SQUISH_CONSTANT * (T)3.0);
       T dz2 = dz4;
       T dw2 = dw3;
-      T attn2 = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2) + (dw2 * dw2);
-      value += std::pow(std::max((T)2.0 - attn2, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb + 1, dx2, dy2, dz2, dw2);
+      {
+        T attn = pow2(dx2) + pow2(dy2) + pow2(dz2) + pow2(dw2);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb, zsb + 1, wsb + 1, dx2, dy2, dz2, dw2);
+      }
 
       // Contribution (0,1,1,1).
-      T dx1 = dx0 - (SQUISH_CONSTANT * (T)3.0);
-      T dy1 = dy4;
-      T dz1 = dz4;
-      T dw1 = dw3;
-      T attn1 = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1) + (dw1 * dw1);
-      value += std::pow(std::max((T)2.0 - attn1, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb + 1, dx1, dy1, dz1, dw1);
+      {
+        T dx1 = dx0 - (SQUISH_CONSTANT * (T)3.0);
+        T dy1 = dy4;
+        T dz1 = dz4;
+        T dw1 = dw3;
+        T attn = pow2(dx1) + pow2(dy1) + pow2(dz1) + pow2(dw1);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb + 1, zsb + 1, wsb + 1, dx1, dy1, dz1, dw1);
+      }
 
       // Contribution (1,1,1,1).
-      dx0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 4);
-      dy0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 4);
-      dz0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 4);
-      dw0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 4);
-      T attn0 = (dx0 * dx0) + (dy0 * dy0) + (dz0 * dz0) + (dw0 * dw0);
-      value += std::pow(std::max((T)2.0 - attn0, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb + 1, wsb + 1, dx0, dy0, dz0, dw0);
+      {
+        dx0 = dx0 - (T)1.0 - (SQUISH_CONSTANT * 4);
+        dy0 = dy0 - (T)1.0 - (SQUISH_CONSTANT * 4);
+        dz0 = dz0 - (T)1.0 - (SQUISH_CONSTANT * 4);
+        dw0 = dw0 - (T)1.0 - (SQUISH_CONSTANT * 4);
+        T attn = pow2(dx0) + pow2(dy0) + pow2(dz0) + pow2(dw0);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb + 1, zsb + 1, wsb + 1, dx0, dy0, dz0, dw0);
+      }
 
     } else if (inSum <= (T)2.0) {
       // Inside the first dispentachoron (rectified 4-simplex).
@@ -1880,104 +1977,104 @@ public:
         }
       }
 
-      //Contribution (1,0,0,0)
+      //Contribution (1,0,0,0).
       T dx1 = dx0 - (T)1.0 - SQUISH_CONSTANT;
       T dy1 = dy0 - SQUISH_CONSTANT;
       T dz1 = dz0 - SQUISH_CONSTANT;
       T dw1 = dw0 - SQUISH_CONSTANT;
       {
-        T attn = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1) + (dw1 * dw1);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb, dx1, dy1, dz1, dw1);
+        T attn = pow2(dx1) + pow2(dy1) + pow2(dz1) + pow2(dw1);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb, zsb, wsb, dx1, dy1, dz1, dw1);
       }
 
-      //Contribution (0,1,0,0)
+      //Contribution (0,1,0,0).
       T dx2 = dx0 - SQUISH_CONSTANT;
       T dy2 = dy0 - (T)1.0 - SQUISH_CONSTANT;
       T dz2 = dz1;
       T dw2 = dw1;
       {
-        T attn = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2) + (dw2 * dw2);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb, dx2, dy2, dz2, dw2);
+        T attn = pow2(dx2) + pow2(dy2) + pow2(dz2) + pow2(dw2);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb + 1, zsb, wsb, dx2, dy2, dz2, dw2);
       }
 
-      //Contribution (0,0,1,0)
+      //Contribution (0,0,1,0).
       {
         T dx3 = dx2;
         T dy3 = dy1;
         T dz3 = dz0 - (T)1.0 - SQUISH_CONSTANT;
         T dw3 = dw1;
-        T attn = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3) + (dw3 * dw3);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb, dx3, dy3, dz3, dw3);
+        T attn = pow2(dx3) + pow2(dy3) + pow2(dz3) + pow2(dw3);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb, zsb + 1, wsb, dx3, dy3, dz3, dw3);
       }
 
-      //Contribution (0,0,0,1)
+      //Contribution (0,0,0,1).
       {
         T dx4 = dx2;
         T dy4 = dy1;
         T dz4 = dz1;
         T dw4 = dw0 - (T)1.0 - SQUISH_CONSTANT;
-        T attn = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4) + (dw4 * dw4);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb, zsb, wsb + 1, dx4, dy4, dz4, dw4);
+        T attn = pow2(dx4) + pow2(dy4) + pow2(dz4) + pow2(dw4);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb, zsb, wsb + 1, dx4, dy4, dz4, dw4);
       }
 
-      //Contribution (1,1,0,0)
+      //Contribution (1,1,0,0).
       {
         T dx5 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dy5 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dz5 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         T dw5 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx5 * dx5) + (dy5 * dy5) + (dz5 * dz5) + (dw5 * dw5);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb, dx5, dy5, dz5, dw5);
+        T attn = pow2(dx5) + pow2(dy5) + pow2(dz5) + pow2(dw5);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb + 1, zsb, wsb, dx5, dy5, dz5, dw5);
       }
 
-      //Contribution (1,0,1,0)
+      //Contribution (1,0,1,0).
       {
         T dx6 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dy6 = dy0 - (SQUISH_CONSTANT * (T)2.0);
         T dz6 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dw6 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx6 * dx6) + (dy6 * dy6) + (dz6 * dz6) + (dw6 * dw6);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb, dx6, dy6, dz6, dw6);
+        T attn = pow2(dx6) + pow2(dy6) + pow2(dz6) + pow2(dw6);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb, zsb + 1, wsb, dx6, dy6, dz6, dw6);
       }
 
-      //Contribution (1,0,0,1)
+      //Contribution (1,0,0,1).
       {
         T dx7 = dx0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dy7 = dy0 - (SQUISH_CONSTANT * (T)2.0);
         T dz7 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         T dw7 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx7 * dx7) + (dy7 * dy7) + (dz7 * dz7) + (dw7 * dw7);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb + 1, dx7, dy7, dz7, dw7);
+        T attn = pow2(dx7) + pow2(dy7) + pow2(dz7) + pow2(dw7);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb, zsb, wsb + 1, dx7, dy7, dz7, dw7);
       }
 
-      // Contribution (0,1,1,0)
+      // Contribution (0,1,1,0).
       {
         T dx8 = dx0 - (SQUISH_CONSTANT * (T)2.0);
         T dy8 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dz8 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dw8 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx8 * dx8) + (dy8 * dy8) + (dz8 * dz8) + (dw8 * dw8);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb, dx8, dy8, dz8, dw8);
+        T attn = pow2(dx8) + pow2(dy8) + pow2(dz8) + pow2(dw8);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb + 1, zsb + 1, wsb, dx8, dy8, dz8, dw8);
       }
 
-      // Contribution (0,1,0,1)
+      // Contribution (0,1,0,1).
       {
         T dx9 = dx0 - (SQUISH_CONSTANT * (T)2.0);
         T dy9 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dz9 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         T dw9 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx9 * dx9) + (dy9 * dy9) + (dz9 * dz9) + (dw9 * dw9);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb + 1, dx9, dy9, dz9, dw9);
+        T attn = pow2(dx9) + pow2(dy9) + pow2(dz9) + pow2(dw9);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb + 1, zsb, wsb + 1, dx9, dy9, dz9, dw9);
       }
 
-      // Contribution (0,0,1,1)
+      // Contribution (0,0,1,1).
       {
         T dx10 = dx0 - 2 * SQUISH_CONSTANT;
         T dy10 = dy0 - 2 * SQUISH_CONSTANT;
         T dz10 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dw10 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx10 * dx10) + (dy10 * dy10) + (dz10 * dz10) + (dw10 * dw10);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb + 1, dx10, dy10, dz10, dw10);
+        T attn = pow2(dx10) + pow2(dy10) + pow2(dz10) + pow2(dw10);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb, zsb + 1, wsb + 1, dx10, dy10, dz10, dw10);
       }
 
     } else {
@@ -2306,8 +2403,8 @@ public:
       T dz4 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
       T dw4 = dw0 - (SQUISH_CONSTANT * (T)3.0);
       {
-        T attn = (dx4 * dx4) + (dy4 * dy4) + (dz4 * dz4) + (dw4 * dw4);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb + 1, wsb, dx4, dy4, dz4, dw4);
+        T attn = pow2(dx4) + pow2(dy4) + pow2(dz4) + pow2(dw4);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb + 1, zsb + 1, wsb, dx4, dy4, dz4, dw4);
       }
 
       //Contribution (1,1,0,1).
@@ -2316,8 +2413,8 @@ public:
       T dz3 = dz0 - (SQUISH_CONSTANT * (T)3.0);
       T dw3 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)3.0);
       {
-        T attn = (dx3 * dx3) + (dy3 * dy3) + (dz3 * dz3) + (dw3 * dw3);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb + 1, dx3, dy3, dz3, dw3);
+        T attn = pow2(dx3) + pow2(dy3) + pow2(dz3) + pow2(dw3);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb + 1, zsb, wsb + 1, dx3, dy3, dz3, dw3);
       }
 
       // Contribution (1,0,1,1).
@@ -2326,8 +2423,8 @@ public:
         T dy2 = dy0 - (SQUISH_CONSTANT * (T)3.0);
         T dz2 = dz4;
         T dw2 = dw3;
-        T attn = (dx2 * dx2) + (dy2 * dy2) + (dz2 * dz2) + (dw2 * dw2);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb + 1, dx2, dy2, dz2, dw2);
+        T attn = pow2(dx2) + pow2(dy2) + pow2(dz2) + pow2(dw2);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb, zsb + 1, wsb + 1, dx2, dy2, dz2, dw2);
       }
 
       // Contribution (0,1,1,1).
@@ -2336,8 +2433,8 @@ public:
         T dz1 = dz4;
         T dy1 = dy4;
         T dw1 = dw3;
-        T attn = (dx1 * dx1) + (dy1 * dy1) + (dz1 * dz1) + (dw1 * dw1);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb + 1, dx1, dy1, dz1, dw1);
+        T attn = pow2(dx1) + pow2(dy1) + pow2(dz1) + pow2(dw1);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb + 1, zsb + 1, wsb + 1, dx1, dy1, dz1, dw1);
       }
 
       // Contribution (1,1,0,0).
@@ -2346,8 +2443,8 @@ public:
         T dy5 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dz5 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         T dw5 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx5 * dx5) + (dy5 * dy5) + (dz5 * dz5) + (dw5 * dw5);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb + 1, zsb, wsb, dx5, dy5, dz5, dw5);
+        T attn = pow2(dx5) + pow2(dy5) + pow2(dz5) + pow2(dw5);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb + 1, zsb, wsb, dx5, dy5, dz5, dw5);
       }
 
       // Contribution (1,0,1,0).
@@ -2356,8 +2453,8 @@ public:
         T dy6 = dy0 - (SQUISH_CONSTANT * (T)2.0);
         T dz6 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dw6 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx6 * dx6) + (dy6 * dy6) + (dz6 * dz6) + (dw6 * dw6);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb + 1, wsb, dx6, dy6, dz6, dw6);
+        T attn = pow2(dx6) + pow2(dy6) + pow2(dz6) + pow2(dw6);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb, zsb + 1, wsb, dx6, dy6, dz6, dw6);
       }
 
       // Contribution (1,0,0,1).
@@ -2366,8 +2463,8 @@ public:
         T dy7 = dy0 - (SQUISH_CONSTANT * (T)2.0);
         T dz7 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         T dw7 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx7 * dx7) + (dy7 * dy7) + (dz7 * dz7) + (dw7 * dw7);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb + 1, ysb, zsb, wsb + 1, dx7, dy7, dz7, dw7);
+        T attn = pow2(dx7) + pow2(dy7) + pow2(dz7) + pow2(dw7);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb + 1, ysb, zsb, wsb + 1, dx7, dy7, dz7, dw7);
       }
 
       // Contribution (0,1,1,0).
@@ -2376,8 +2473,8 @@ public:
         T dy8 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dz8 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dw8 = dw0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx8 * dx8) + (dy8 * dy8) + (dz8 * dz8) + (dw8 * dw8);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb + 1, wsb, dx8, dy8, dz8, dw8);
+        T attn = pow2(dx8) + pow2(dy8) + pow2(dz8) + pow2(dw8);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb + 1, zsb + 1, wsb, dx8, dy8, dz8, dw8);
       }
 
       // Contribution (0,1,0,1).
@@ -2386,8 +2483,8 @@ public:
         T dy9 = dy0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dz9 = dz0 - (SQUISH_CONSTANT * (T)2.0);
         T dw9 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx9 * dx9) + (dy9 * dy9) + (dz9 * dz9) + (dw9 * dw9);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb + 1, zsb, wsb + 1, dx9, dy9, dz9, dw9);
+        T attn = pow2(dx9) + pow2(dy9) + pow2(dz9) + pow2(dw9);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb + 1, zsb, wsb + 1, dx9, dy9, dz9, dw9);
       }
 
       // Contribution (0,0,1,1).
@@ -2396,30 +2493,30 @@ public:
         T dy10 = dy0 - (SQUISH_CONSTANT * (T)2.0);
         T dz10 = dz0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
         T dw10 = dw0 - (T)1.0 - (SQUISH_CONSTANT * (T)2.0);
-        T attn = (dx10 * dx10) + (dy10 * dy10) + (dz10 * dz10) + (dw10 * dw10);
-        value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsb, ysb, zsb + 1, wsb + 1, dx10, dy10, dz10, dw10);
+        T attn = pow2(dx10) + pow2(dy10) + pow2(dz10) + pow2(dw10);
+        value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsb, ysb, zsb + 1, wsb + 1, dx10, dy10, dz10, dw10);
       }
     }
 
     // First extra vertex.
     {
-      T attn = (dx_ext0 * dx_ext0) + (dy_ext0 * dy_ext0) + (dz_ext0 * dz_ext0) + (dw_ext0 * dw_ext0);
-      value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsv_ext0, ysv_ext0, zsv_ext0, wsv_ext0, dx_ext0, dy_ext0, dz_ext0, dw_ext0);
+      T attn = pow2(dx_ext0) + pow2(dy_ext0) + pow2(dz_ext0) + pow2(dw_ext0);
+      value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsv_ext0, ysv_ext0, zsv_ext0, wsv_ext0, dx_ext0, dy_ext0, dz_ext0, dw_ext0);
     }
 
     // Second extra vertex.
     {
-      T attn = (dx_ext1 * dx_ext1) + (dy_ext1 * dy_ext1) + (dz_ext1 * dz_ext1) + (dw_ext1 * dw_ext1);
-      value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsv_ext1, ysv_ext1, zsv_ext1, wsv_ext1, dx_ext1, dy_ext1, dz_ext1, dw_ext1);
+      T attn = pow2(dx_ext1) + pow2(dy_ext1) + pow2(dz_ext1) + pow2(dw_ext1);
+      value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsv_ext1, ysv_ext1, zsv_ext1, wsv_ext1, dx_ext1, dy_ext1, dz_ext1, dw_ext1);
     }
 
     // Third extra vertex.
     {
-      T attn = (dx_ext2 * dx_ext2) + (dy_ext2 * dy_ext2) + (dz_ext2 * dz_ext2) + (dw_ext2 * dw_ext2);
-      value += std::pow(std::max((T)2.0 - attn, (T)0.0), 4) * extrapolate(xsv_ext2, ysv_ext2, zsv_ext2, wsv_ext2, dx_ext2, dy_ext2, dz_ext2, dw_ext2);
+      T attn = pow2(dx_ext2) + pow2(dy_ext2) + pow2(dz_ext2) + pow2(dw_ext2);
+      value += pow4(std::max((T)2.0 - attn, (T)0.0)) * extrapolate(xsv_ext2, ysv_ext2, zsv_ext2, wsv_ext2, dx_ext2, dy_ext2, dz_ext2, dw_ext2);
     }
 
-    return (value / NORM_CONSTANT);
+    return (value * NORM_CONSTANT);
   }
 
 };
