@@ -19,45 +19,17 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-
-#ifndef OPENSIMPLEXNOISE_HH
-#define OPENSIMPLEXNOISE_HH
+#pragma once
 
 #include <cmath>
-
-#define OSN_USE_CSTDINT
-#define OSN_USE_STATIC_ASSERT
-
-#ifdef OSN_USE_CSTDINT
-  // cstdint is required for the int64_t type
-  #include <cstdint>
-#else
-  #pragma message("Info: Not using <cstdint> for fixed-width integral types. To enable this feature, define OSN_USE_CSTDINT before including this header.")
-  // cstdlib is required for the srand and rand functions
-  #include <cstdlib>
-#endif
-
-#ifdef OSN_USE_STATIC_ASSERT
-  // type_traits is required for the is_floating_point function
-  #include <type_traits>
-#endif
+#include <cstdint>
+#include <type_traits>
 
 
 namespace OSN {
 
-#ifdef OSN_USE_CSTDINT
-  typedef uint_fast8_t OSN_BYTE;
-#ifndef OSN_INT_TYPE
-#define OSN_INT_TYPE int64_t
-#endif
-#else
-  typedef unsigned char OSN_BYTE;
-#ifndef OSN_INT_TYPE
-#define OSN_INT_TYPE long
-#endif
-#endif
-
-typedef OSN_INT_TYPE inttype;
+typedef uint_fast8_t OSN_BYTE;
+typedef int64_t inttype;
 
 namespace {
 
@@ -92,7 +64,6 @@ protected:
   // Empty constructor to allow child classes to set up perm themselves.
   NoiseBase (void) {}
 
-#ifdef OSN_USE_CSTDINT
   // Perform one step of the Linear Congruential Generator algorithm.
   inline static void LCG_STEP (int64_t & x) {
     // Magic constants are attributed to Donald Knuth's MMIX implementation.
@@ -119,21 +90,6 @@ protected:
       source[r] = source[i];
     }
   }
-#else
-  // Initializes the class using a permutation array generated from a 32-bit seed.
-  // Generates a proper permutation (i.e. doesn't merely perform N successive
-  // pair swaps on a base array).
-  NoiseBase (long seed) {
-    int source [256];
-    for (int i = 0; i < 256; ++i) { source[i] = i; }
-    srand(seed);
-    for (int i = 255; i >= 0; --i) {
-      int r = (int)(rand() % (i + 1));
-      perm[i] = source[r];
-      source[r] = source[i];
-    }
-  }
-#endif
 
   NoiseBase (const int * p) {
     // Copy the supplied permutation array into this instance
@@ -170,20 +126,14 @@ private:
 
 public:
 
-#ifdef OSN_USE_CSTDINT
   Noise (int64_t seed = 0LL) : NoiseBase (seed) {}
-#else
-  Noise (long seed = 0L) : NoiseBase (seed) {}
-#endif
   Noise (const int * p) : NoiseBase (p) {}
 
 
   template <typename T>
   T eval (T x, T y) const {
 
-#ifdef OSN_USE_STATIC_ASSERT
     static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
-#endif
 
     static const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
     static const T SQUISH_CONSTANT  = (T)((std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
@@ -320,9 +270,7 @@ public:
   template <typename T>
   void deval (T x, T y, T (&v) [2]) const {
 
-#ifdef OSN_USE_STATIC_ASSERT
     static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
-#endif
 
     static const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
     static const T SQUISH_CONSTANT  = (T)((std::sqrt(2.0 + 1.0) - 1.0) * 0.5);
@@ -504,7 +452,6 @@ private:
 
 public:
 
-#ifdef OSN_USE_CSTDINT
   // Initializes the class using a permutation array generated from a 64-bit seed.
   // Generates a proper permutation (i.e. doesn't merely perform N successive
   // pair swaps on a base array).
@@ -524,23 +471,6 @@ public:
       source[r] = source[i];
     }
   }
-#else
-  // Initializes the class using a permutation array generated from a 32-bit seed.
-  // Generates a proper permutation (i.e. doesn't merely perform N successive
-  // pair swaps on a base array).
-  Noise (long seed = 0L) : NoiseBase () {
-    int source [256];
-    for (int i = 0; i < 256; ++i) { source[i] = i; }
-    srand(seed);
-    for (int i = 255; i >= 0; --i) {
-      int r = (int)(rand() % (i + 1));
-      perm[i] = source[r];
-      // NB: 72 is the number of elements of the gradients3D array
-      permGradIndex[i] = (int)((perm[i] % (72 / 3)) * 3);
-      source[r] = source[i];
-    }
-  }
-#endif
 
   Noise (const int * p) : NoiseBase () {
     // Copy the supplied permutation array into this instance.
@@ -554,9 +484,7 @@ public:
   template <typename T>
   T eval (T x, T y, T z) const {
 
-#ifdef OSN_USE_STATIC_ASSERT
     static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
-#endif
 
     static const T STRETCH_CONSTANT = (T)(-1.0 / 6.0); // (1 / sqrt(3 + 1) - 1) / 3
     static const T SQUISH_CONSTANT  = (T)(1.0 / 3.0);  // (sqrt(3 + 1) - 1) / 3
@@ -1176,20 +1104,14 @@ private:
 
 public:
 
-#ifdef OSN_USE_CSTDINT
   Noise (int64_t seed = 0LL) : NoiseBase (seed) {}
-#else
-  Noise (long seed = 0L) : NoiseBase (seed) {}
-#endif
   Noise (const int * p) : NoiseBase (p) {}
 
 
   template <typename T>
   T eval (T x, T y, T z, T w) const {
 
-#ifdef OSN_USE_STATIC_ASSERT
     static_assert(std::is_floating_point<T>::value, "OpenSimplexNoise can only be used with floating-point types");
-#endif
 
     static const T STRETCH_CONSTANT = (T)((1.0 / std::sqrt(4.0 + 1.0) - 1.0) * 0.25);
     static const T SQUISH_CONSTANT  = (T)((std::sqrt(4.0 + 1.0) - 1.0) * 0.25);
