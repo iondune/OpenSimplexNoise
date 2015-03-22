@@ -25,12 +25,8 @@
 
 #include <cmath>
 
-#if __cplusplus < 201103L
-  #pragma message("Info: Your compiler does not claim C++11 support. Some features may be unavailable.")
-#else
-  #define OSN_USE_CSTDINT
-  #define OSN_USE_STATIC_ASSERT
-#endif
+#define OSN_USE_CSTDINT
+#define OSN_USE_STATIC_ASSERT
 
 #ifdef OSN_USE_CSTDINT
   // cstdint is required for the int64_t type
